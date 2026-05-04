@@ -36,4 +36,15 @@ export const bootEnv = {
     INFLUX_RETRY_SLOW_DELAY_MS: Number(process.env.INFLUX_RETRY_SLOW_DELAY_MS || '10000'),
     INFLUX_HEALTHCHECK_INTERVAL_MS: Number(process.env.INFLUX_HEALTHCHECK_INTERVAL_MS || '10000'),
     INFLUX_HEALTHCHECK_TIMEOUT_MS: Number(process.env.INFLUX_HEALTHCHECK_TIMEOUT_MS || '3000'),
+
+    // Grafana settings
+    GRAFANA_URL: process.env.GRAFANA_URL || 'http://localhost:3000',
+    GRAFANA_PUBLIC_URL: process.env.GRAFANA_PUBLIC_URL || 'http://localhost:3000',
+    GRAFANA_USER: process.env.GRAFANA_USER || 'admin',
+    GRAFANA_PASSWORD: process.env.GRAFANA_PASSWORD || 'admin',
+    GRAFANA_INFLUX_URL: process.env.GRAFANA_INFLUX_URL || 'http://influxdb3:8181',
+    GRAFANA_DATASOURCE_UID: process.env.GRAFANA_DATASOURCE_UID || 'governify-influxdb3',
+    GRAFANA_DATASOURCE_NAME: process.env.GRAFANA_DATASOURCE_NAME || 'Governify InfluxDB 3',
+    GRAFANA_FOLDER_UID: process.env.GRAFANA_FOLDER_UID || 'governify',
+    GRAFANA_FOLDER_TITLE: process.env.GRAFANA_FOLDER_TITLE || 'Governify',
 };

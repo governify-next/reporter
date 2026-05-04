@@ -2,7 +2,7 @@ import app from './app.js';
 import { getLogger } from './utils/logger.js';
 import { bootEnv } from './config/bootConfig.js';
 import { connectMongo } from './db/mongo.js';
-import { connectInflux, writeInfluxPoint } from './db/influx.js';
+import { connectInflux } from './db/influx.js';
 
 const logger = getLogger().setTag('server.ts');
 const PORT = bootEnv.PORT;

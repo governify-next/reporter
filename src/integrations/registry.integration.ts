@@ -24,3 +24,25 @@ export const getAuditableAgreementVersionStates = async (
 
     return result.data;
 };
+
+export const getAuditableAgreementVersion = async (
+    orgName: string,
+    elementName: string,
+    agColName: string,
+): Promise<unknown> => {
+    const response = await fetch(
+        `${REGISTRY_SERVICE_URL}/api/v1/organizations/${orgName}/elements/${elementName}/agreementCollections/${agColName}/agreementVersions/auditableVersion?expand=true`,
+        {
+            method: 'GET',
+            headers: serviceHeaders,
+        },
+    );
+    const result = await response.json();
+
+    if (!result.success)
+        throw new Error(
+            `Failed to fetch auditable agreement version for organization ${orgName}, element ${elementName}, and agreement collection ${agColName}`,
+        );
+
+    return result.data;
+};

@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { healthRoutes } from './routes/health.routes.js';
 import { influxRoutes } from './routes/influx.routes.js';
+import { dashboardRoutes } from './routes/dashboard.routes.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
@@ -19,6 +20,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.use(healthRoutes);
 app.use('/api/v1', influxRoutes);
+app.use('/api/v1', dashboardRoutes);
 app.use(errorHandler);
 
 export default app;
