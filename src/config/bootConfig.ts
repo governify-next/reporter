@@ -21,7 +21,7 @@ export const bootEnv = {
 
     // JWT configuration
     SERVICE_AUTHENTICATION_ENABLED: process.env.SERVICE_AUTHENTICATION_ENABLED === 'true',
-    JWT_SECRET: process.env.JWT_SECRET || 'governify_secret_key',
+    JWT_SECRET: process.env.JWT_SECRET || 'governify_next_secret_key',
 
     // InfluxDB settings
     INFLUX_TOKEN: process.env.INFLUX_TOKEN || 'supersecrettoken',
