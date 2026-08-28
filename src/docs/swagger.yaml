@@ -1,225 +1,299 @@
 openapi: 3.0.0
 info:
-    title: Express API Boilerplatesss
+    title: Governify Next Reporter API
     version: 1.0.0
-    description: A simple Express API with TypeScript
+    description: |
+        Reporter synchronizes the current State projection from Registry into InfluxDB and
+        creates Grafana dashboards for a selected agreement version.
 servers:
     - url: /
+tags:
+    - name: Health
+    - name: InfluxDB
+    - name: Dashboards
 paths:
     /health:
         get:
-            tags:
-                - Health
-            summary: Health check
+            tags: [Health]
+            summary: Check Reporter health
+            operationId: getHealth
             responses:
                 '200':
-                    description: OK
+                    description: Reporter is running
                     content:
                         application/json:
                             schema:
                                 type: object
+                                required: [status, message]
                                 properties:
                                     status:
                                         type: string
-    /api/v1/users:
-        get:
-            tags:
-                - Users
-            summary: List all users
-            responses:
-                '200':
-                    description: A list of users
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    data:
-                                        type: array
-                                        items:
-                                            $ref: '#/components/schemas/User'
+                                        example: ok
                                     message:
                                         type: string
-                                    success:
-                                        type: boolean
+                                        example: Health check passed
+
+    /api/v1/influx/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}/states/sync:
         post:
-            tags:
-                - Users
-            summary: Create a new user
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/UserInput'
+            tags: [InfluxDB]
+            summary: Synchronize the current States of an agreement version
+            operationId: syncAgreementVersionStates
+            description: |
+                Retrieves the currently stored States from Registry and writes their latest
+                projection to the `states` and `state_metrics` InfluxDB measurements.
+
+                `agreementVersion` accepts a one-based number (`1` selects the first version) or
+                `auditableVersion`, which Registry resolves to the current auditable version.
+
+                The synchronization includes `IN_PROGRESS`, `COMPLETED`, `FAILED`, compliant,
+                non-compliant and indeterminate States. Registry's null `complianceStatus` for an
+                `IN_PROGRESS` State is projected as `PENDING` because InfluxDB fields cannot store
+                null. Nullable numeric values are accompanied by an `...Available` boolean.
+
+                Repeating the synchronization writes the same logical point identity
+                (measurement, tags and State date), updating the current projection. Writes are
+                split into bounded batches according to Reporter configuration.
+            parameters:
+                - $ref: '#/components/parameters/orgName'
+                - $ref: '#/components/parameters/scopeId'
+                - $ref: '#/components/parameters/agColId'
+                - $ref: '#/components/parameters/agreementVersion'
             responses:
-                '201':
-                    description: User created
+                '200':
+                    description: Current States synchronized successfully
                     content:
                         application/json:
                             schema:
-                                type: object
-                                properties:
-                                    data:
-                                        $ref: '#/components/schemas/User'
-                                    message:
-                                        type: string
-                                    success:
-                                        type: boolean
-                '409':
-                    description: Email already exists
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Error'
+                                allOf:
+                                    - $ref: '#/components/schemas/SuccessResponse'
+                                    - type: object
+                                      properties:
+                                          data:
+                                              $ref: '#/components/schemas/StateSyncResult'
+                            example:
+                                success: true
+                                message: States synchronized successfully
+                                httpStatus: 200
+                                appCode: SUCCESS
+                                data:
+                                    organizationName: universidad-sevilla
+                                    scopeId: 69cbdee759092b362376ca17
+                                    agColId: 69cbe9901d5009a04361925d
+                                    agreementVersion: '2'
+                                    statePoints: 12
+                                    metricPoints: 36
+                                    totalPoints: 48
+                                    batches: 1
+                                error: null
+                '400':
+                    $ref: '#/components/responses/BadRequest'
+                '404':
+                    $ref: '#/components/responses/NotFound'
+                '502':
+                    $ref: '#/components/responses/BadGateway'
                 '500':
-                    description: Internal server error
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Error'
-    /api/v1/users/{id}:
-        get:
-            tags:
-                - Users
-            summary: Get user by ID
+                    $ref: '#/components/responses/InternalError'
+
+    /api/v1/dashboards/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}:
+        post:
+            tags: [Dashboards]
+            summary: Create or update the Grafana dashboard for an agreement version
+            operationId: createAgreementVersionDashboard
+            description: |
+                Resolves the selected agreement version through Registry, builds dashboard queries
+                against the current Reporter InfluxDB schema, and creates or updates the Grafana
+                dashboard. Its default time range starts at the agreement version validity
+                `initial` date and ends at `earlyTermination` when present, or at `end` otherwise.
+                Compliance percentages exclude `INDETERMINATE` and `PENDING` States.
             parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema:
-                      type: string
-                  description: User ID (Mongo ObjectId)
+                - $ref: '#/components/parameters/orgName'
+                - $ref: '#/components/parameters/scopeId'
+                - $ref: '#/components/parameters/agColId'
+                - $ref: '#/components/parameters/agreementVersion'
             responses:
                 '200':
-                    description: User found
+                    description: Grafana dashboard created or updated
                     content:
                         application/json:
                             schema:
-                                type: object
-                                properties:
-                                    data:
-                                        $ref: '#/components/schemas/User'
-                                    message:
-                                        type: string
-                                    success:
-                                        type: boolean
+                                allOf:
+                                    - $ref: '#/components/schemas/SuccessResponse'
+                                    - type: object
+                                      properties:
+                                          data:
+                                              $ref: '#/components/schemas/DashboardResult'
+                '400':
+                    $ref: '#/components/responses/BadRequest'
                 '404':
-                    description: User not found
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Error'
-        put:
-            tags:
-                - Users
-            summary: Update user by ID
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema:
-                      type: string
-                  description: User ID (Mongo ObjectId)
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/UserInput'
-            responses:
-                '200':
-                    description: User updated
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    data:
-                                        $ref: '#/components/schemas/User'
-                                    message:
-                                        type: string
-                                    success:
-                                        type: boolean
-                '404':
-                    description: User not found
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Error'
-        delete:
-            tags:
-                - Users
-            summary: Delete user by ID
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema:
-                      type: string
-                  description: User ID (Mongo ObjectId)
-            responses:
-                '200':
-                    description: User deleted
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    data:
-                                        type: 'null'
-                                    message:
-                                        type: string
-                                    success:
-                                        type: boolean
-                '404':
-                    description: User not found
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Error'
+                    $ref: '#/components/responses/NotFound'
+                '502':
+                    $ref: '#/components/responses/BadGateway'
+                '500':
+                    $ref: '#/components/responses/InternalError'
 
 components:
+    parameters:
+        orgName:
+            in: path
+            name: orgName
+            required: true
+            description: Organization name
+            schema:
+                type: string
+            example: universidad-sevilla
+        scopeId:
+            in: path
+            name: scopeId
+            required: true
+            description: Scope identifier used by Registry
+            schema:
+                type: string
+            example: 69cbdee759092b362376ca17
+        agColId:
+            in: path
+            name: agColId
+            required: true
+            description: Agreement collection ObjectId
+            schema:
+                type: string
+                pattern: '^[a-fA-F0-9]{24}$'
+            example: 69cbe9901d5009a04361925d
+        agreementVersion:
+            in: path
+            name: agreementVersion
+            required: true
+            description: One-based agreement version selector or `auditableVersion`
+            schema:
+                type: string
+                pattern: '^(auditableVersion|[1-9][0-9]*)$'
+            examples:
+                numeric:
+                    value: '2'
+                auditable:
+                    value: auditableVersion
+
     schemas:
-        User:
+        SuccessResponse:
             type: object
-            required:
-                - _id
-                - name
-                - email
+            required: [success, message, httpStatus, appCode, data, error]
             properties:
-                _id:
-                    type: string
-                    description: MongoDB ObjectId
-                name:
-                    type: string
-                email:
-                    type: string
-                password:
-                    type: string
-                createdAt:
-                    type: string
-                    format: date-time
-                updatedAt:
-                    type: string
-                    format: date-time
-        UserInput:
-            type: object
-            required:
-                - name
-                - email
-                - password
-            properties:
-                name:
-                    type: string
-                email:
-                    type: string
-                password:
-                    type: string
-        Error:
-            type: object
-            properties:
-                error:
-                    type: string
+                success:
+                    type: boolean
+                    example: true
                 message:
                     type: string
+                httpStatus:
+                    type: integer
+                    example: 200
+                appCode:
+                    type: string
+                    example: SUCCESS
+                data: {}
+                error:
+                    nullable: true
+                    example: null
+        ErrorResponse:
+            type: object
+            required: [success, message, httpStatus, appCode, data, error]
+            properties:
+                success:
+                    type: boolean
+                    example: false
+                message:
+                    type: string
+                httpStatus:
+                    type: integer
+                appCode:
+                    type: string
+                data:
+                    nullable: true
+                    example: null
+                error:
+                    type: object
+                    properties:
+                        message:
+                            type: string
+                        details: {}
+        StateSyncResult:
+            type: object
+            required:
+                - organizationName
+                - scopeId
+                - agColId
+                - agreementVersion
+                - statePoints
+                - metricPoints
+                - totalPoints
+                - batches
+            properties:
+                organizationName:
+                    type: string
+                scopeId:
+                    type: string
+                agColId:
+                    type: string
+                agreementVersion:
+                    type: string
+                    description: Version number resolved by Registry, even when the selector was `auditableVersion`.
+                statePoints:
+                    type: integer
+                    minimum: 0
+                metricPoints:
+                    type: integer
+                    minimum: 0
+                totalPoints:
+                    type: integer
+                    minimum: 0
+                batches:
+                    type: integer
+                    minimum: 0
+        DashboardResult:
+            type: object
+            properties:
+                orgName:
+                    type: string
+                scopeId:
+                    type: string
+                agColId:
+                    type: string
+                agreementVersion:
+                    type: integer
+                agreementTemplateName:
+                    type: string
+                grafanaUid:
+                    type: string
+                grafanaUrl:
+                    type: string
+                    format: uri
+                grafanaStatus:
+                    type: string
+                grafanaVersion:
+                    type: integer
+                panels:
+                    type: integer
+
+    responses:
+        BadRequest:
+            description: Invalid agreement version selector or request parameters
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        NotFound:
+            description: Organization, scope, agreement collection or agreement version not found
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        BadGateway:
+            description: Registry returned an invalid or unavailable response
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        InternalError:
+            description: Unexpected Reporter, InfluxDB or Grafana error
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'

@@ -27,6 +27,10 @@ export const bootEnv = {
     INFLUX_TOKEN: process.env.INFLUX_TOKEN || 'supersecrettoken',
     INFLUX_DATABASE: process.env.INFLUX_DATABASE || 'governify-next',
     INFLUX_WRITE_PRECISION: process.env.INFLUX_WRITE_PRECISION || 'millisecond',
+    INFLUX_WRITE_BATCH_MAX_POINTS: Number(process.env.INFLUX_WRITE_BATCH_MAX_POINTS || '5000'),
+    INFLUX_WRITE_BATCH_MAX_BYTES: Number(
+        process.env.INFLUX_WRITE_BATCH_MAX_BYTES || String(8 * 1024 * 1024),
+    ),
     INFLUX_MAX_FAST_RETRIES: Number(process.env.INFLUX_MAX_FAST_RETRIES || '5'),
     INFLUX_RETRY_FAST_DELAY_MS: Number(process.env.INFLUX_RETRY_FAST_DELAY_MS || '1000'),
     INFLUX_SLOW_RECONNECTION_MAX_RETRIES: Number(

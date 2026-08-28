@@ -1,171 +1,117 @@
-import * as registryIntegrations from '../integrations/registry.integration.js';
+import * as registryIntegration from '../integrations/registry.integration.js';
 import {
     writeInfluxPoints,
     type InfluxPointInput,
     type InfluxFields,
     type InfluxTags,
 } from '../db/influx.js';
+import {
+    StateStatus,
+    type AgreementSignature,
+    type AgreementState,
+    type AgreementStateMetric,
+    type AgreementVersionStatesResponse,
+} from '../types/registry.types.js';
 
-type WindowPeriod = {
-    unit?: string;
-    value?: number;
-};
-
-type AgreementStateMetric = {
-    metricName?: string;
-    value?: number | string | boolean;
-    evidences?: unknown[];
-    metricConfig?: {
-        event?: {
-            eventId?: string;
-            fetcherConfigs?: Array<{
-                fetcherId?: string;
-                fetchResultId?: string;
-                fetcherConfig?: Record<string, unknown>;
-            }>;
-            processConfig?: Record<string, unknown>;
-        };
-        aggregation?: {
-            aggregatorType?: string;
-        };
-    };
-};
-
-type AgreementState = {
-    _id: string;
-    signatureId?: string;
-    startDate?: string;
-    endDate?: string;
-    date: string;
-    consolidated?: boolean;
-    status?: string;
-    numericExpression?: string;
-    comparator?: string;
-    threshold?: number;
-    replacedNumericExpression?: string;
-    numericExpressionValue?: number | null;
-    compliant?: boolean | null;
-    indeterminate?: boolean;
-    window?: {
-        period?: WindowPeriod[];
-        anchorDate?: string;
-    };
-    metrics?: AgreementStateMetric[];
-    createdAt?: string;
-    updatedAt?: string;
-    __v?: number;
-};
-
-type AgreementSignature = {
-    signatureId: string;
-    guarantee?: {
-        name?: string;
-        numericExpression?: string;
-        comparator?: string;
-        threshold?: number;
-        window?: {
-            period?: WindowPeriod[];
-            anchorDate?: string;
-        };
-        metrics?: unknown[];
-    };
-    states?: AgreementState[];
-};
-
-type AuditableAgreementVersionStatesResponse = {
-    organizationName: string;
-    elementName: string;
-    agreementCollectionName: string;
-    agreementVersion: {
-        versionNumber: number;
-        contract?: {
-            agreementTemplateName?: string;
-            validity?: {
-                timezone?: string;
-                initial?: string;
-                end?: string;
-                earlyTermination?: string | null;
-            };
-            signatures?: AgreementSignature[];
-        };
-    };
-};
-
-const toTagValue = (value: unknown, fallback = 'unknown'): string => {
+const toRequiredTagValue = (value: unknown, fieldName: string): string => {
     if (value === undefined || value === null || value === '') {
-        return fallback;
+        throw new Error(`Registry response is missing required field ${fieldName}`);
     }
-
     return String(value);
 };
 
-const setField = (
-    fields: InfluxFields,
-    key: string,
-    value: string | number | boolean | null | undefined,
-) => {
-    if (value === undefined || value === null) return;
-
-    if (typeof value === 'number' && !Number.isFinite(value)) return;
-
-    fields[key] = value;
+const toTimestamp = (value: string, fieldName: string): Date => {
+    const timestamp = new Date(value);
+    if (Number.isNaN(timestamp.getTime())) {
+        throw new Error(`Registry returned an invalid ${fieldName}: ${value}`);
+    }
+    return timestamp;
 };
 
-const getAgreementVersion = (agreement: AuditableAgreementVersionStatesResponse): string => {
+const getNumericProjection = (value: number | null) => {
+    const available = value !== null && Number.isFinite(value);
+    return {
+        value: available ? value : 0,
+        available,
+    };
+};
+
+const getAgreementVersion = (agreement: AgreementVersionStatesResponse): string => {
     return String(agreement.agreementVersion.versionNumber);
 };
 
-const getAgreementTemplateName = (agreement: AuditableAgreementVersionStatesResponse): string => {
-    return toTagValue(agreement.agreementVersion.contract?.agreementTemplateName);
+const getComplianceStatusProjection = (state: AgreementState): string => {
+    if (state.complianceStatus !== null && state.complianceStatus !== undefined) {
+        return state.complianceStatus;
+    }
+    if (state.status === StateStatus.IN_PROGRESS) {
+        return 'PENDING';
+    }
+    throw new Error(
+        `Terminal State ${state._id} is missing complianceStatus; migrate or regenerate it in Registry`,
+    );
 };
 
 const getSignatureId = (signature: AgreementSignature, state: AgreementState): string => {
-    return toTagValue(signature.signatureId ?? state.signatureId);
+    return toRequiredTagValue(
+        signature.signatureId ?? state.signatureId,
+        'agreementVersion.contract.signatures[].signatureId',
+    );
 };
 
-const buildCommonTags = (agreement: AuditableAgreementVersionStatesResponse): InfluxTags => {
+const buildCommonTags = (agreement: AgreementVersionStatesResponse): InfluxTags => {
     return {
-        organizationName: toTagValue(agreement.organizationName),
-        elementName: toTagValue(agreement.elementName),
-        agreementCollectionName: toTagValue(agreement.agreementCollectionName),
-        agreementTemplateName: getAgreementTemplateName(agreement),
+        organizationName: toRequiredTagValue(agreement.organizationName, 'organizationName'),
+        scopeId: toRequiredTagValue(agreement.scopeId, 'scopeId'),
+        agColId: toRequiredTagValue(agreement.agColId, 'agColId'),
+        agreementTemplateName: toRequiredTagValue(
+            agreement.agreementVersion.contract.agreementTemplateName,
+            'agreementVersion.contract.agreementTemplateName',
+        ),
         agreementVersion: getAgreementVersion(agreement),
     };
 };
 
 const buildStateTags = (
-    agreement: AuditableAgreementVersionStatesResponse,
+    agreement: AgreementVersionStatesResponse,
     signature: AgreementSignature,
     state: AgreementState,
 ): InfluxTags => {
     return {
         ...buildCommonTags(agreement),
-        guaranteeName: toTagValue(signature.guarantee?.name),
+        guaranteeName: toRequiredTagValue(
+            signature.guarantee.name,
+            'agreementVersion.contract.signatures[].guarantee.name',
+        ),
         signatureId: getSignatureId(signature, state),
-        stateId: toTagValue(state._id),
+        stateId: toRequiredTagValue(state._id, 'state._id'),
     };
 };
 
 const buildStateFields = (state: AgreementState): InfluxFields => {
-    const fields: InfluxFields = {};
+    const numericExpressionValue = getNumericProjection(state.numericExpressionValue);
 
-    setField(fields, 'consolidated', state.consolidated);
-    setField(fields, 'compliant', state.compliant);
-    setField(fields, 'indeterminate', state.indeterminate);
-
-    setField(fields, 'status', state.status);
-
-    setField(fields, 'numericExpression', state.numericExpression);
-    setField(fields, 'replacedNumericExpression', state.replacedNumericExpression);
-    setField(fields, 'comparator', state.comparator);
-    setField(fields, 'threshold', state.threshold);
-    setField(fields, 'numericExpressionValue', state.numericExpressionValue);
-
-    return fields;
+    return {
+        generationId: state.generationId,
+        attempt: state.attempt,
+        consolidated: state.consolidated,
+        status: state.status,
+        complianceStatus: getComplianceStatusProjection(state),
+        startDate: state.startDate,
+        endDate: state.endDate ?? '',
+        endDateAvailable: state.endDate !== null,
+        numericExpression: state.numericExpression,
+        replacedNumericExpression: state.replacedNumericExpression ?? '',
+        replacedNumericExpressionAvailable: state.replacedNumericExpression !== null,
+        comparator: state.comparator,
+        threshold: state.threshold,
+        numericExpressionValue: numericExpressionValue.value,
+        numericExpressionValueAvailable: numericExpressionValue.available,
+    };
 };
 
 const buildStatePoint = (
-    agreement: AuditableAgreementVersionStatesResponse,
+    agreement: AgreementVersionStatesResponse,
     signature: AgreementSignature,
     state: AgreementState,
 ): InfluxPointInput => {
@@ -173,47 +119,51 @@ const buildStatePoint = (
         measurement: 'states',
         tags: buildStateTags(agreement, signature, state),
         fields: buildStateFields(state),
-        timestamp: new Date(state.date),
+        timestamp: toTimestamp(state.date, 'state.date'),
     };
 };
 
 const buildMetricPoint = (
-    agreement: AuditableAgreementVersionStatesResponse,
+    agreement: AgreementVersionStatesResponse,
     signature: AgreementSignature,
     state: AgreementState,
     metric: AgreementStateMetric,
 ): InfluxPointInput => {
-    const fields: InfluxFields = {};
-
-    setField(fields, 'value', metric.value);
+    const metricValue = getNumericProjection(metric.value);
 
     return {
         measurement: 'state_metrics',
         tags: {
             ...buildCommonTags(agreement),
             signatureId: getSignatureId(signature, state),
-            stateId: toTagValue(state._id),
-            guaranteeName: toTagValue(signature.guarantee?.name),
-            metricName: toTagValue(metric.metricName),
+            stateId: toRequiredTagValue(state._id, 'state._id'),
+            guaranteeName: toRequiredTagValue(
+                signature.guarantee.name,
+                'agreementVersion.contract.signatures[].guarantee.name',
+            ),
+            metricName: toRequiredTagValue(metric.metricName, 'state.metrics[].metricName'),
         },
-        fields,
-        timestamp: new Date(state.date),
+        fields: {
+            status: metric.status,
+            value: metricValue.value,
+            valueAvailable: metricValue.available,
+            errorMessage: metric.errorMessage ?? '',
+            errorMessageAvailable: metric.errorMessage !== null,
+            eventId: metric.metricConfig.event.eventId,
+            aggregatorType: metric.metricConfig.aggregation.aggregatorType,
+        },
+        timestamp: toTimestamp(state.date, 'state.date'),
     };
 };
 
-const buildInfluxPoints = (agreement: AuditableAgreementVersionStatesResponse) => {
+export const buildInfluxPoints = (agreement: AgreementVersionStatesResponse) => {
     const statePoints: InfluxPointInput[] = [];
     const metricPoints: InfluxPointInput[] = [];
 
-    const signatures = agreement.agreementVersion.contract?.signatures ?? [];
-
-    for (const signature of signatures) {
-        const states = signature.states ?? [];
-
-        for (const state of states) {
-            if (state.indeterminate) continue;
+    for (const signature of agreement.agreementVersion.contract.signatures) {
+        for (const state of signature.states ?? []) {
             statePoints.push(buildStatePoint(agreement, signature, state));
-            for (const metric of state.metrics ?? []) {
+            for (const metric of state.metrics) {
                 metricPoints.push(buildMetricPoint(agreement, signature, state, metric));
             }
         }
@@ -225,31 +175,30 @@ const buildInfluxPoints = (agreement: AuditableAgreementVersionStatesResponse) =
     };
 };
 
-export const syncAuditableAgreementVersionStates = async (
+export const syncAgreementVersionStates = async (
     orgName: string,
-    elementName: string,
-    agColName: string,
-): Promise<unknown> => {
-    const auditableAgreementVersionStates =
-        (await registryIntegrations.getAuditableAgreementVersionStates(
-            orgName,
-            elementName,
-            agColName,
-        )) as AuditableAgreementVersionStatesResponse;
-
-    const { statePoints, metricPoints } = buildInfluxPoints(auditableAgreementVersionStates);
-
+    scopeId: string,
+    agColId: string,
+    agreementVersion: string,
+) => {
+    const agreementVersionStates = await registryIntegration.getAgreementVersionStates(
+        orgName,
+        scopeId,
+        agColId,
+        agreementVersion,
+    );
+    const { statePoints, metricPoints } = buildInfluxPoints(agreementVersionStates);
     const allPoints = [...statePoints, ...metricPoints];
-
-    await writeInfluxPoints(allPoints);
+    const writeResult = await writeInfluxPoints(allPoints);
 
     return {
-        organizationName: auditableAgreementVersionStates.organizationName,
-        elementName: auditableAgreementVersionStates.elementName,
-        agreementCollectionName: auditableAgreementVersionStates.agreementCollectionName,
-        agreementVersion: getAgreementVersion(auditableAgreementVersionStates),
+        organizationName: agreementVersionStates.organizationName,
+        scopeId: agreementVersionStates.scopeId,
+        agColId: agreementVersionStates.agColId,
+        agreementVersion: getAgreementVersion(agreementVersionStates),
         statePoints: statePoints.length,
         metricPoints: metricPoints.length,
         totalPoints: allPoints.length,
+        batches: writeResult.batches,
     };
 };

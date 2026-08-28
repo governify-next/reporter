@@ -7,6 +7,8 @@ const INFLUX_URL = bootEnv.INFLUX_URL;
 const INFLUX_TOKEN = bootEnv.INFLUX_TOKEN;
 const INFLUX_DATABASE = bootEnv.INFLUX_DATABASE;
 const INFLUX_WRITE_PRECISION = bootEnv.INFLUX_WRITE_PRECISION;
+const INFLUX_WRITE_BATCH_MAX_POINTS = bootEnv.INFLUX_WRITE_BATCH_MAX_POINTS;
+const INFLUX_WRITE_BATCH_MAX_BYTES = bootEnv.INFLUX_WRITE_BATCH_MAX_BYTES;
 const INFLUX_MAX_FAST_RETRIES = bootEnv.INFLUX_MAX_FAST_RETRIES;
 const INFLUX_RETRY_FAST_DELAY_MS = bootEnv.INFLUX_RETRY_FAST_DELAY_MS;
 const INFLUX_SLOW_RECONNECTION_MAX_RETRIES = bootEnv.INFLUX_SLOW_RECONNECTION_MAX_RETRIES;
@@ -325,11 +327,56 @@ export const writeInfluxPoint = async (data: InfluxPointInput) => {
 };
 
 export const writeInfluxPoints = async (data: InfluxPointInput[]) => {
-    if (data.length === 0) return;
+    if (data.length === 0) {
+        return { points: 0, batches: 0 };
+    }
+    if (
+        !Number.isSafeInteger(INFLUX_WRITE_BATCH_MAX_POINTS) ||
+        INFLUX_WRITE_BATCH_MAX_POINTS <= 0 ||
+        !Number.isSafeInteger(INFLUX_WRITE_BATCH_MAX_BYTES) ||
+        INFLUX_WRITE_BATCH_MAX_BYTES <= 0
+    ) {
+        throw new Error('InfluxDB batch limits must be positive safe integers');
+    }
 
-    const lineProtocol = data.map(buildLineProtocol).join('\n');
+    const lines = data.map(buildLineProtocol);
+    let batch: string[] = [];
+    let batchBytes = 0;
+    let batches = 0;
 
-    await writeLineProtocol(lineProtocol);
+    const flushBatch = async () => {
+        if (batch.length === 0) return;
+        await writeLineProtocol(batch.join('\n'));
+        batches += 1;
+        batch = [];
+        batchBytes = 0;
+    };
+
+    for (const line of lines) {
+        const lineBytes = Buffer.byteLength(line, 'utf8');
+        if (lineBytes > INFLUX_WRITE_BATCH_MAX_BYTES) {
+            throw new Error(
+                `A single InfluxDB point exceeds INFLUX_WRITE_BATCH_MAX_BYTES (${INFLUX_WRITE_BATCH_MAX_BYTES})`,
+            );
+        }
+
+        const separatorBytes = batch.length === 0 ? 0 : 1;
+        const exceedsPointLimit = batch.length >= INFLUX_WRITE_BATCH_MAX_POINTS;
+        const exceedsByteLimit =
+            batch.length > 0 &&
+            batchBytes + separatorBytes + lineBytes > INFLUX_WRITE_BATCH_MAX_BYTES;
+
+        if (exceedsPointLimit || exceedsByteLimit) {
+            await flushBatch();
+        }
+
+        batch.push(line);
+        batchBytes += (batch.length === 1 ? 0 : 1) + lineBytes;
+    }
+
+    await flushBatch();
+
+    return { points: data.length, batches };
 };
 
 /**

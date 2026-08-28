@@ -2,17 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '../utils/standardResponse.js';
 import * as influxService from '../services/influx.service.js';
 
-export const syncAuditableAgreementVersionStates = async (
+export const syncAgreementVersionStates = async (
     req: Request,
     res: Response,
     next: NextFunction,
 ) => {
     try {
-        const { orgName, elementName, agColName } = req.params;
-        const states = await influxService.syncAuditableAgreementVersionStates(
+        const { orgName, scopeId, agColId, agreementVersion } = req.params;
+        const states = await influxService.syncAgreementVersionStates(
             orgName,
-            elementName,
-            agColName,
+            scopeId,
+            agColId,
+            agreementVersion,
         );
         return sendSuccess(res, {
             data: states,

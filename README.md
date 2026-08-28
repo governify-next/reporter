@@ -1,42 +1,34 @@
-# Express TypeScript Boilerplate
+# Governify Next Reporter
 
-A layered Express API boilerplate with TypeScript (Requires Node.js 24+ and MongoDB)
+Reporter reads the current agreement-version States from Registry, projects them into InfluxDB 3,
+and creates Grafana dashboards over that projection.
+
+## Main endpoints
+
+- `POST /api/v1/influx/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}/states/sync`
+  manually synchronizes all currently stored States and metrics.
+- `POST /api/v1/dashboards/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}`
+  creates or updates the Grafana dashboard.
+- `GET /health` checks service availability.
+- `/api-docs` exposes the Swagger UI.
+
+`agreementVersion` accepts a one-based positive integer or `auditableVersion`.
+
+## InfluxDB projection
+
+- `states` contains one point for every Registry State, including `IN_PROGRESS`, `FAILED`, and
+  `INDETERMINATE` results.
+- `state_metrics` contains every State metric, including unavailable, pending, and failed metrics.
+- Nullable numeric values are written with a companion availability field.
+- Registry's null `complianceStatus` while processing is projected as `PENDING`.
+- Writes are split by configurable point and byte limits.
 
 ## Scripts
 
-- `npm install` — Install dependencies
-- `npm run dev` — Start in development mode
-- `npm run build` — Compile TypeScript to JavaScript
-- `npm run start` — Start compiled app
+- `npm run dev` starts Reporter in development mode.
+- `npm run build` compiles TypeScript.
+- `npm start` starts the compiled service.
+- `npm test` runs the test suite.
+- `npm run lint` runs ESLint.
 
-## Features
-
-- Swagger API documentation
-- Centralized error handling
-- Standardized API responses
-- Environment variable management with dotenv
-- MongoDB integration with Mongoose
-- Structured logging with tags
-- Layered architecture (routes, controllers, services, models)
-- TypeScript for type safety
-- ESLint and Prettier for code quality and formatting
-- Unit tests with Vitest
-- GitHub Actions CI/CD pipeline
-- Health check endpoint
-- Husky pre-commit hooks
-- Dockerfile for containerization
-- Request validation with Express Validator
-- Graceful shutdown handling XXXXXXXXXXXXXX
-- Rate limiting middleware XXXXXXXXXXXXXXXXXXXXXX
-- Helmet for security headers
-
-## Influx docker
-
-To run InfluxDB in a Docker container, you can use the following command:
-
-```bash
-docker network create influxdb3-net
-docker run -d --name influxdb3 --network influxdb3-net -p 8181:8181 -v influxdb3-data:/var/lib/influxdb3 influxdb:3-core serve --node-id=reporter-node --object-store=file --data-dir=/var/lib/influxdb3
-docker run -d --name influxdb3-explorer --network influxdb3-net -p 8080:8080 -p 8443:8443 influxdata/influxdb3-ui --mode=admin
-docker exec -it influxdb3 influxdb3 create token --admin
-```
+Configuration variables and their defaults are documented in `.env.example`.

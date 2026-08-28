@@ -2,17 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '../utils/standardResponse.js';
 import * as dashboardService from '../services/dashboard.service.js';
 
-export const createAuditableAgreementVersionDashboard = async (
+export const createAgreementVersionDashboard = async (
     req: Request,
     res: Response,
     next: NextFunction,
 ) => {
     try {
-        const { orgName, elementName, agColName } = req.params;
-        const dashboard = await dashboardService.createAuditableAgreementVersionDashboard(
+        const { orgName, scopeId, agColId, agreementVersion } = req.params;
+        const dashboard = await dashboardService.createAgreementVersionDashboard(
             orgName,
-            elementName,
-            agColName,
+            scopeId,
+            agColId,
+            agreementVersion,
         );
 
         return sendSuccess(res, {
