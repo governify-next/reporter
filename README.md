@@ -68,7 +68,7 @@ With `reporter` and `infrastructure` checked out next to each other, run from th
 npm ci
 npm run plugin:install
 npm run plugin:build
-docker compose -f ../infrastructure/docker-compose.yaml up -d mongo redis influxdb3 grafana
+docker compose -f ../infrastructure/docker-compose.dev.yaml up -d mongo redis influxdb3 grafana
 npm run dev
 ```
 
@@ -88,7 +88,7 @@ When migrating from the old plugin location under `infrastructure`, rebuild the 
 and recreate only Grafana to apply the new mount:
 
 ```sh
-docker compose -f ../infrastructure/docker-compose.yaml up -d --no-deps --force-recreate grafana
+docker compose -f ../infrastructure/docker-compose.dev.yaml up -d --no-deps --force-recreate grafana
 ```
 
 The existing `grafana-data` volume is retained.
