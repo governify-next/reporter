@@ -1,0 +1,17 @@
+{
+    "name": "governify-compliance-ranking-panel",
+    "version": "1.0.2",
+    "private": true,
+    "scripts": {
+        "build": "webpack --config webpack.config.cjs && node scripts/copy-assets.cjs",
+        "watch": "node scripts/copy-assets.cjs && webpack --config webpack.config.cjs --watch"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.28.0",
+        "@babel/preset-react": "^7.27.1",
+        "@babel/preset-typescript": "^7.27.1",
+        "babel-loader": "^10.0.0",
+        "webpack": "^5.105.0",
+        "webpack-cli": "^6.0.1"
+    }
+}

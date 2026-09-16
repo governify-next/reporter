@@ -1,0 +1,25 @@
+{
+    "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+    "type": "panel",
+    "name": "Governify Compliance Ranking",
+    "id": "governify-compliance-ranking-panel",
+    "info": {
+        "description": "Non-zoomable compliance distribution for Governify agreement collections.",
+        "author": {
+            "name": "Governify"
+        },
+        "keywords": ["governify", "compliance", "ranking"],
+        "logos": {
+            "small": "img/logo.svg",
+            "large": "img/logo.svg"
+        },
+        "links": [],
+        "screenshots": [],
+        "version": "1.0.2",
+        "updated": "2026-08-30"
+    },
+    "dependencies": {
+        "grafanaDependency": ">=11.1.0",
+        "plugins": []
+    }
+}
