@@ -77,6 +77,9 @@ export type AgreementState = {
 
 export type AgreementSignature = {
     signatureId: string;
+    visualizationConfig: {
+        label: string;
+    };
     guarantee: {
         name: string;
         info: {
@@ -96,6 +99,12 @@ export type AgreementSignature = {
         }>;
     };
     states?: AgreementState[];
+};
+
+export type AgreementCollectionInfo = {
+    name: string;
+    displayName?: string;
+    description?: string;
 };
 
 export type AgreementVersion = {

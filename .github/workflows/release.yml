@@ -34,9 +34,16 @@ jobs:
             - name: Set up Docker Buildx
               if: ${{ steps.release.outputs.release_created }}
               uses: docker/setup-buildx-action@v4
-            - name: Build and push
+            - name: Build and push Reporter
               if: ${{ steps.release.outputs.release_created }}
               uses: docker/build-push-action@v7
               with:
                   push: true
                   tags: governifynext/reporter:${{ steps.release.outputs.tag_name }}
+            - name: Build and push Grafana with Reporter plugin
+              if: ${{ steps.release.outputs.release_created }}
+              uses: docker/build-push-action@v7
+              with:
+                  file: grafana/Dockerfile
+                  push: true
+                  tags: governifynext/reporter-grafana:${{ steps.release.outputs.tag_name }}

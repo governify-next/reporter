@@ -7,6 +7,12 @@
     "scripts": {
         "dev": "nodemon",
         "build": "tsc",
+        "plugin:install": "npm ci --prefix grafana/plugins/governify-compliance-ranking-panel",
+        "plugin:build": "npm run build --prefix grafana/plugins/governify-compliance-ranking-panel",
+        "dev:plugin": "npm run watch --prefix grafana/plugins/governify-compliance-ranking-panel",
+        "image:reporter": "docker build -t governifynext/reporter:local .",
+        "image:grafana": "docker build -f grafana/Dockerfile -t governifynext/reporter-grafana:local .",
+        "images:build": "npm run image:reporter && npm run image:grafana",
         "start": "node dist/server.js",
         "format": "prettier --write .",
         "format:check": "prettier --check .",

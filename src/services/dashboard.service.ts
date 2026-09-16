@@ -2,9 +2,16 @@ import crypto from 'node:crypto';
 import * as registryIntegrations from '../integrations/registry.integration.js';
 import * as grafanaIntegration from '../integrations/grafana.integration.js';
 import { bootEnv } from '../config/bootConfig.js';
-import type { AgreementSignature, AgreementVersion } from '../types/registry.types.js';
+import type {
+    AgreementCollectionInfo,
+    AgreementSignature,
+    AgreementVersion,
+} from '../types/registry.types.js';
+
+export type SignatureLabelMode = 'label' | 'signatureId';
 
 type DashboardContext = {
+    signatureLabelMode: SignatureLabelMode;
     orgName: string;
     scopeId: string;
     agColId: string;
@@ -22,6 +29,8 @@ const SUMMARY_HEIGHT = 5;
 const TIMELINE_HEIGHT = 10;
 const GUARANTEE_INFO_HEIGHT = 5;
 const SIGNATURE_COMPARISON_MIN_HEIGHT = 6;
+const COMPLIANCE_RANKING_PANEL_ID = 'governify-compliance-ranking-panel';
+const COMPLIANCE_RANKING_PANEL_VERSION = '1.0.2';
 const THRESHOLD_REF_ID = 'T';
 const THRESHOLD_BACKGROUND_FIELD_NAME = 'Threshold background';
 const THRESHOLD_LINE_FIELD_NAME = 'Threshold';
@@ -228,7 +237,25 @@ const groupSignaturesByGuarantee = (signatures: AgreementSignature[]) => {
     }));
 };
 
-const getSignatureSeriesName = (signature: AgreementSignature) => signature.signatureId.slice(-6);
+const getConfiguredSignatureLabel = (
+    signature: AgreementSignature,
+    signatureLabelMode: SignatureLabelMode,
+) => {
+    // Versions created before visualizationConfig existed keep their original labels.
+    const label = signature.visualizationConfig?.label;
+    return signatureLabelMode === 'label' && typeof label === 'string' && label.trim()
+        ? label
+        : undefined;
+};
+
+const getSignatureSeriesName = (
+    signature: AgreementSignature,
+    signatureLabelMode: SignatureLabelMode,
+) =>
+    // Keep field identities unique even if labels repeat or match threshold field names.
+    getConfiguredSignatureLabel(signature, signatureLabelMode) !== undefined
+        ? signature.signatureId
+        : signature.signatureId.slice(-6);
 
 const buildTimelinePointSeries = (seriesName: string) =>
     [
@@ -369,14 +396,21 @@ const buildPointSeriesOverride = (seriesName: string, color: string, pointSize: 
     ],
 });
 
-const buildSignatureTimelineOverrides = (signature: AgreementSignature) => {
-    const seriesName = getSignatureSeriesName(signature);
+const buildSignatureTimelineOverrides = (
+    signature: AgreementSignature,
+    signatureLabelMode: SignatureLabelMode,
+) => {
+    const seriesName = getSignatureSeriesName(signature, signatureLabelMode);
     const color = getSignatureColor(signature.signatureId);
 
     return [
         {
             matcher: { id: 'byName', options: seriesName },
             properties: [
+                {
+                    id: 'displayName',
+                    value: getConfiguredSignatureLabel(signature, signatureLabelMode) ?? seriesName,
+                },
                 { id: 'color', value: { mode: 'fixed', fixedColor: color } },
                 { id: 'custom.drawStyle', value: 'line' },
                 { id: 'custom.lineWidth', value: 1 },
@@ -412,10 +446,13 @@ WHERE ${timeFilter}${where}
   AND "complianceStatus" IN ('COMPLIANT', 'NON_COMPLIANT')`;
 };
 
-const buildSignatureLabelExpression = (signatures: AgreementSignature[]) => {
+const buildSignatureLabelExpression = (
+    signatures: AgreementSignature[],
+    signatureLabelMode: SignatureLabelMode,
+) => {
     const cases = signatures.map(
         (signature, index) =>
-            `WHEN ${sqlString(signature.signatureId)} THEN ${sqlString(getSignatureLabel(signature, index))}`,
+            `WHEN ${sqlString(signature.signatureId)} THEN ${sqlString(getSignatureLabel(signature, index, signatureLabelMode))}`,
     );
 
     return `CASE "signatureId"
@@ -441,7 +478,7 @@ const buildSignatureComplianceComparisonQuery = (
     signatures: AgreementSignature[],
 ) => {
     const where = buildWhereClause(context, { guaranteeName });
-    const labelExpression = buildSignatureLabelExpression(signatures);
+    const labelExpression = buildSignatureLabelExpression(signatures, context.signatureLabelMode);
     const orderExpression = buildSignatureOrderExpression(signatures);
 
     return `SELECT
@@ -464,14 +501,26 @@ GROUP BY "signatureId"
 ORDER BY ${orderExpression} ASC`;
 };
 
-const buildRankingQuery = (context: DashboardContext, guaranteeName: string) => {
+const buildRankingMarkerQuery = (
+    context: DashboardContext,
+    guaranteeName: string,
+    markerFieldName: 'Other agreements' | 'Current agreement',
+    currentAgreement: boolean,
+) => {
+    const currentAgreementCondition = `scope = ${sqlString(context.scopeId)}
+         AND agreement_collection = ${sqlString(context.agColId)}
+         AND version = ${sqlString(String(context.agreementVersion))}`;
+    const groupFilter = currentAgreement ? '= 1' : '= 0';
+
     return `WITH scored AS (
     SELECT
         "scopeId" AS scope,
         "agColId" AS agreement_collection,
         "agreementVersion" AS version,
-        COUNT(*) AS samples,
-        100.0 * SUM(CASE WHEN "complianceStatus" = 'COMPLIANT' THEN 1 ELSE 0 END) / COUNT(*) AS compliance
+        ROUND(
+            100.0 * SUM(CASE WHEN "complianceStatus" = 'COMPLIANT' THEN 1 ELSE 0 END) / COUNT(*),
+            1
+        ) AS compliance
     FROM "states"
     WHERE $__timeFilter(time)
       AND "organizationName" = ${sqlString(context.orgName)}
@@ -482,37 +531,35 @@ const buildRankingQuery = (context: DashboardContext, guaranteeName: string) => 
     GROUP BY "scopeId", "agColId", "agreementVersion"
     HAVING COUNT(*) > 0
 ),
-ranked AS (
+grouped AS (
     SELECT
-        CAST(
-            ROW_NUMBER() OVER (
-                ORDER BY compliance DESC, samples DESC, scope ASC, agreement_collection ASC, version ASC
-            ) AS DOUBLE
-        ) AS rank_position,
-        scope,
-        agreement_collection,
-        version,
         compliance,
-        samples,
-        CASE
-            WHEN scope = ${sqlString(context.scopeId)}
-             AND agreement_collection = ${sqlString(context.agColId)}
-             AND version = ${sqlString(String(context.agreementVersion))}
-            THEN 'current'
-            ELSE ''
-        END AS current_agreement
+        COUNT(*) AS agreement_count,
+        MAX(
+            CASE
+                WHEN ${currentAgreementCondition} THEN 1
+                ELSE 0
+            END
+        ) AS contains_current_agreement
     FROM scored
+    GROUP BY compliance
 )
 SELECT
-    rank_position AS "Rank",
-    scope AS "Scope",
-    agreement_collection AS "Agreement collection",
-    version AS "Version",
-    compliance AS "Compliance"
-FROM ranked
-WHERE rank_position <= 10 OR current_agreement = 'current'
-ORDER BY rank_position ASC`;
+    compliance AS "Compliance",
+    CAST(1 AS DOUBLE) AS "${markerFieldName}",
+    CAST(agreement_count AS VARCHAR) AS "Agreements"
+FROM grouped
+WHERE contains_current_agreement ${groupFilter}
+ORDER BY compliance DESC`;
 };
+
+const buildRankingRangeQuery = () => `SELECT
+    CAST(0 AS DOUBLE) AS "Compliance",
+    CAST(1 AS DOUBLE) AS "Range"
+UNION ALL
+SELECT
+    CAST(100 AS DOUBLE) AS "Compliance",
+    CAST(1 AS DOUBLE) AS "Range"`;
 
 const buildRowPanel = (id: number, title: string, y: number) => ({
     id,
@@ -522,6 +569,56 @@ const buildRowPanel = (id: number, title: string, y: number) => ({
     collapsed: false,
     panels: [],
 });
+
+const escapeMarkdown = (value: string) =>
+    value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/[\\`*_{}[\]()#+.!|~-]/g, '\\$&');
+
+const getAgreementTitle = (agreement: AgreementCollectionInfo, templateName: string) =>
+    agreement.displayName?.trim() || agreement.name?.trim() || templateName;
+
+const buildAgreementInfoPanel = (
+    id: number,
+    context: DashboardContext,
+    agreement: AgreementCollectionInfo,
+    validity: AgreementVersion['contract']['validity'],
+) => {
+    const formatDate = (value: string) =>
+        new Intl.DateTimeFormat('en-GB', {
+            timeZone: validity.timezone,
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+        }).format(new Date(value));
+    const description = agreement.description?.trim();
+    const effectiveEnd = validity.earlyTermination ?? validity.end;
+    const lines = [
+        `## ${escapeMarkdown(getAgreementTitle(agreement, context.agreementTemplateName))}`,
+        ...(description ? [`**Decription:** ${escapeMarkdown(description)}`] : []),
+        `**Organization:** ${escapeMarkdown(context.orgName)} · **Version:** ${context.agreementVersion}`,
+        `**Template:** ${escapeMarkdown(context.agreementTemplateName)}`,
+        `**Validity:** ${formatDate(validity.initial)} — ${formatDate(effectiveEnd)} · **Time zone:** ${escapeMarkdown(validity.timezone)}`,
+        ...(validity.earlyTermination
+            ? [
+                  `**Early termination:** ${formatDate(validity.earlyTermination)} · **Originally scheduled end:** ${formatDate(validity.end)}`,
+              ]
+            : []),
+    ];
+    return {
+        id,
+        title: '',
+        type: 'text',
+        gridPos: { x: 0, y: 0, w: GRID_WIDTH, h: 6 + (validity.earlyTermination ? 1 : 0) },
+        options: { mode: 'markdown', content: lines.join('\n\n') },
+    };
+};
 
 const buildGuaranteeInfoPanel = (
     id: number,
@@ -656,7 +753,7 @@ const buildSignatureComplianceComparisonPanel = (
             custom: {
                 axisPlacement: 'auto',
                 axisSoftMin: 0,
-                axisSoftMax: 104,
+                axisSoftMax: 102,
                 fillOpacity: 80,
                 gradientMode: 'none',
                 lineWidth: 1,
@@ -680,82 +777,33 @@ const buildRankingPanel = (
 ) => ({
     id,
     title,
-    type: 'table',
+    type: COMPLIANCE_RANKING_PANEL_ID,
+    pluginVersion: COMPLIANCE_RANKING_PANEL_VERSION,
     datasource,
     gridPos: { x, y, w, h },
-    targets: [buildTarget('A', buildRankingQuery(context, guaranteeName), 'table')],
+    targets: [
+        buildTarget('R', buildRankingRangeQuery(), 'table'),
+        buildTarget(
+            'O',
+            buildRankingMarkerQuery(context, guaranteeName, 'Other agreements', false),
+            'table',
+        ),
+        buildTarget(
+            'C',
+            buildRankingMarkerQuery(context, guaranteeName, 'Current agreement', true),
+            'table',
+        ),
+    ],
     options: {
-        showHeader: true,
-        cellHeight: 'sm',
-        footer: {
-            show: false,
-            reducer: ['sum'],
-            countRows: false,
-            fields: '',
-        },
-    },
-    fieldConfig: {
-        defaults: {
-            custom: {
-                align: 'auto',
-                cellOptions: {
-                    type: 'auto',
-                },
-                inspect: false,
-            },
-        },
-        overrides: [
-            {
-                matcher: { id: 'byName', options: 'Rank' },
-                properties: [
-                    { id: 'custom.width', value: 70 },
-                    { id: 'custom.align', value: 'center' },
-                    { id: 'decimals', value: 0 },
-                ],
-            },
-            {
-                matcher: { id: 'byName', options: 'Scope' },
-                properties: [{ id: 'custom.width', value: 120 }],
-            },
-            {
-                matcher: { id: 'byName', options: 'Agreement collection' },
-                properties: [{ id: 'custom.cellOptions', value: { type: 'auto' } }],
-            },
-            {
-                matcher: { id: 'byName', options: 'Version' },
-                properties: [
-                    { id: 'custom.width', value: 80 },
-                    { id: 'custom.align', value: 'center' },
-                ],
-            },
-            {
-                matcher: { id: 'byName', options: 'Compliance' },
-                properties: [
-                    { id: 'unit', value: 'percent' },
-                    { id: 'decimals', value: 1 },
-                    { id: 'min', value: 0 },
-                    { id: 'max', value: 100 },
-                    {
-                        id: 'thresholds',
-                        value: {
-                            mode: 'absolute',
-                            steps: [
-                                { value: null, color: 'red' },
-                                { value: 50, color: 'yellow' },
-                                { value: 80, color: 'green' },
-                            ],
-                        },
-                    },
-                    {
-                        id: 'custom.cellOptions',
-                        value: {
-                            type: 'gauge',
-                            mode: 'basic',
-                        },
-                    },
-                ],
-            },
-        ],
+        axisColor: '#4a4a4a',
+        currentColor: '#3274d9',
+        currentSize: 7,
+        decimals: 1,
+        hoverSize: 12,
+        lineColor: '#c7c7c7',
+        lineWidth: 2,
+        otherColor: '#4a4a4a',
+        otherSize: 5,
     },
 });
 
@@ -803,7 +851,7 @@ const buildStatePanel = (
                     context,
                     guaranteeName,
                     signature.signatureId,
-                    getSignatureSeriesName(signature),
+                    getSignatureSeriesName(signature, context.signatureLabelMode),
                 ),
             ),
         ),
@@ -823,13 +871,22 @@ const buildStatePanel = (
         overrides: [
             buildThresholdBackgroundOverride(comparator, threshold),
             buildThresholdLineOverride(comparator),
-            ...signatures.flatMap((signature) => buildSignatureTimelineOverrides(signature)),
+            ...signatures.flatMap((signature) =>
+                buildSignatureTimelineOverrides(signature, context.signatureLabelMode),
+            ),
         ],
     },
 });
 
-const getSignatureLabel = (signature: AgreementSignature, index: number) => {
-    return `Signature ${index + 1}: ${signature.signatureId.slice(-6)}`;
+const getSignatureLabel = (
+    signature: AgreementSignature,
+    index: number,
+    signatureLabelMode: SignatureLabelMode,
+) => {
+    return (
+        getConfiguredSignatureLabel(signature, signatureLabelMode) ??
+        `Signature ${index + 1}: ${signature.signatureId.slice(-6)}`
+    );
 };
 
 const buildDashboard = (
@@ -837,11 +894,13 @@ const buildDashboard = (
     signatures: AgreementSignature[],
     grafanaUid: string,
     validity: AgreementVersion['contract']['validity'],
+    agreement: AgreementCollectionInfo,
 ) => {
     let panelId = 1;
-    let y = 0;
-    const panels: Array<Record<string, unknown>> = [];
     const guarantees = groupSignaturesByGuarantee(signatures);
+    const overview = buildAgreementInfoPanel(0, context, agreement, validity);
+    let y = overview.gridPos.h;
+    const panels: Array<Record<string, unknown>> = [overview];
 
     for (const guarantee of guarantees) {
         panels.push(buildRowPanel(panelId++, guarantee.info.title, y));
@@ -916,9 +975,12 @@ const buildDashboard = (
         y += 1;
     }
 
+    // Keep existing chart IDs stable when adding the overview above them.
+    overview.id = panelId;
+
     return {
         uid: grafanaUid,
-        title: `${context.orgName} / ${context.scopeId} / ${context.agColId} v${context.agreementVersion}`,
+        title: `${context.orgName} / ${getAgreementTitle(agreement, context.agreementTemplateName)} / v${context.agreementVersion}`,
         tags: [
             'governify',
             'agreement-version',
@@ -983,15 +1045,15 @@ export const createAgreementVersionDashboard = async (
     scopeId: string,
     agColId: string,
     agreementVersion: string,
+    signatureLabelMode: SignatureLabelMode = 'label',
 ) => {
-    const selectedAgreementVersion = await registryIntegrations.getAgreementVersion(
-        orgName,
-        scopeId,
-        agColId,
-        agreementVersion,
-    );
+    const [selectedAgreementVersion, agreement] = await Promise.all([
+        registryIntegrations.getAgreementVersion(orgName, scopeId, agColId, agreementVersion),
+        registryIntegrations.getAgreementCollectionInfo(orgName, agColId),
+    ]);
 
     const context: DashboardContext = {
+        signatureLabelMode,
         orgName,
         scopeId,
         agColId,
@@ -1006,6 +1068,7 @@ export const createAgreementVersionDashboard = async (
         signatures,
         grafanaUid,
         selectedAgreementVersion.contract.validity,
+        agreement,
     );
 
     await grafanaIntegration.ensureInfluxDataSource();
@@ -1034,7 +1097,11 @@ export const createAgreementVersionDashboard = async (
     const grafanaUrl = `${bootEnv.GRAFANA_PUBLIC_URL.replace(/\/+$/, '')}/d/${savedDashboard.uid}`;
 
     return {
-        ...context,
+        orgName,
+        scopeId,
+        agColId,
+        agreementVersion: context.agreementVersion,
+        agreementTemplateName: context.agreementTemplateName,
         grafanaUid: savedDashboard.uid,
         grafanaUrl,
         grafanaStatus: savedDashboard.status,

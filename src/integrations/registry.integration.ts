@@ -1,7 +1,11 @@
 import { bootEnv } from '../config/bootConfig.js';
 import { serviceHeaders } from '../utils/serviceAuth.js';
 import { StdError } from '../utils/customErrors.js';
-import type { AgreementVersion, AgreementVersionStatesResponse } from '../types/registry.types.js';
+import type {
+    AgreementCollectionInfo,
+    AgreementVersion,
+    AgreementVersionStatesResponse,
+} from '../types/registry.types.js';
 
 const REGISTRY_SERVICE_URL = bootEnv.REGISTRY_SERVICE_URL.replace(/\/+$/, '');
 
@@ -93,4 +97,20 @@ export const getAgreementVersion = async (
         agreementVersion,
     )}?expand=true`;
     return await getRegistryData<AgreementVersion>(path, `agreement version ${agreementVersion}`);
+};
+
+export const getAgreementCollectionInfo = async (
+    orgName: string,
+    agColId: string,
+): Promise<AgreementCollectionInfo> => {
+    const path = `/api/v1/organizations/${encodePathSegment(orgName)}/agreementCollections/${encodePathSegment(agColId)}?expand=false`;
+    const collection = await getRegistryData<AgreementCollectionInfo>(
+        path,
+        'agreement information',
+    );
+    return {
+        name: collection.name,
+        displayName: collection.displayName,
+        description: collection.description,
+    };
 };

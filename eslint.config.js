@@ -5,6 +5,10 @@ import markdown from '@eslint/markdown';
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
+    {
+        // The Grafana plugin is a separate package, validated by its own build.
+        ignores: ['**/dist/**', 'grafana/plugins/**'],
+    },
     tseslint.configs.recommended,
     {
         files: ['src/**/*.{ts,cts,mts}'],

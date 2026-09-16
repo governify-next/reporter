@@ -24,10 +24,18 @@ jobs:
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: 'npm'
+                  cache-dependency-path: |
+                      package-lock.json
+                      grafana/plugins/governify-compliance-ranking-panel/package-lock.json
 
             # Install dependencies (clean install for CI)
             - name: Install dependencies
               run: npm ci
+
+            - name: Install and build Grafana plugin
+              run: |
+                  npm run plugin:install
+                  npm run plugin:build
 
             # Lint only src/ for TypeScript, markdown anywhere
             - name: Lint code
@@ -46,3 +54,6 @@ jobs:
               run: npm test
               env:
                   CI: true
+
+            - name: Build both container images
+              run: npm run images:build

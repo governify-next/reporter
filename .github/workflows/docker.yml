@@ -22,8 +22,14 @@ jobs:
               uses: docker/setup-qemu-action@v4
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v4
-            - name: Build and push
+            - name: Build and push Reporter
               uses: docker/build-push-action@v7
               with:
                   push: true
                   tags: governifynext/reporter:develop
+            - name: Build and push Grafana with Reporter plugin
+              uses: docker/build-push-action@v7
+              with:
+                  file: grafana/Dockerfile
+                  push: true
+                  tags: governifynext/reporter-grafana:develop

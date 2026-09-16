@@ -105,11 +105,35 @@ paths:
                 dashboard. Its default time range starts at the agreement version validity
                 `initial` date and ends at `earlyTermination` when present, or at `end` otherwise.
                 Compliance percentages exclude `INDETERMINATE` and `PENDING` States.
+                The dashboard starts with an agreement overview containing its title, description,
+                organization, version, template, and validity in the agreement time zone.
+                Early termination includes the originally scheduled end.
             parameters:
                 - $ref: '#/components/parameters/orgName'
                 - $ref: '#/components/parameters/scopeId'
                 - $ref: '#/components/parameters/agColId'
                 - $ref: '#/components/parameters/agreementVersion'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                signatureLabelMode:
+                                    type: string
+                                    enum: [label, signatureId]
+                                    default: label
+                                    description: |
+                                        Use visualizationConfig.label in timelines and signature
+                                        comparisons, or signatureId for the previous presentation
+                                        using its last six characters. Older signatures without a
+                                        configured label retain the previous presentation.
+                        examples:
+                            configuredLabels:
+                                value: { signatureLabelMode: label }
+                            signatureIdentifiers:
+                                value: { signatureLabelMode: signatureId }
             responses:
                 '200':
                     description: Grafana dashboard created or updated
