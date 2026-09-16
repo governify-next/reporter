@@ -1,6 +1,6 @@
 {
     "name": "reporter",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Governify Next State reporting service for InfluxDB and Grafana",
     "main": "index.js",
     "type": "module",
