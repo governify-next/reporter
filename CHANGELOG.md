@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/governify-next/reporter/compare/v1.1.0...v1.1.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* new version ([2148ba7](https://github.com/governify-next/reporter/commit/2148ba7579d311cb2e30e6df208589dd4b541323))
+
 ## 1.1.0 (2026-09-16)
 
 ### Features
