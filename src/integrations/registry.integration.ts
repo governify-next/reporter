@@ -1,5 +1,5 @@
 import { bootEnv } from '../config/bootConfig.js';
-import { serviceHeaders } from '../utils/serviceAuth.js';
+import { getServiceHeaders } from '../utils/serviceAuthentication.js';
 import { StdError } from '../utils/customErrors.js';
 import type {
     AgreementCollectionInfo,
@@ -37,7 +37,7 @@ const getRegistryData = async <T>(path: string, resourceDescription: string): Pr
     try {
         response = await fetch(`${REGISTRY_SERVICE_URL}${path}`, {
             method: 'GET',
-            headers: serviceHeaders,
+            headers: getServiceHeaders(),
         });
     } catch (error) {
         throw new StdError({

@@ -13,6 +13,7 @@ export const bootEnv = {
     PORT: process.env.PORT || '5905',
 
     // Internal service URLs
+    AUTHENTICATOR_SERVICE_URL: process.env.AUTHENTICATOR_SERVICE_URL || 'http://localhost:5900',
     REGISTRY_SERVICE_URL: process.env.REGISTRY_SERVICE_URL || 'http://localhost:5902',
 
     // Database URIs
@@ -21,6 +22,8 @@ export const bootEnv = {
 
     // JWT configuration
     SERVICE_AUTHENTICATION_ENABLED: process.env.SERVICE_AUTHENTICATION_ENABLED !== 'false',
+    CLIENT_ID: process.env.CLIENT_ID || 'reporter',
+    CLIENT_SECRET: process.env.CLIENT_SECRET || 'reporter_client_secret',
     JWT_SECRET: process.env.JWT_SECRET || 'governify_next_secret_key',
     JWT_ISSUER: process.env.JWT_ISSUER || 'authenticator',
     JWT_AUDIENCE: process.env.JWT_AUDIENCE || 'governify-next',
