@@ -5,6 +5,8 @@ info:
     description: |
         Reporter synchronizes the current State projection from Registry into InfluxDB and
         creates Grafana dashboards for a selected agreement version.
+
+        Protected operations require a JWT whose `type` claim is `service`.
 servers:
     - url: /
 tags:
@@ -38,6 +40,8 @@ paths:
             tags: [InfluxDB]
             summary: Synchronize the current States of an agreement version
             operationId: syncAgreementVersionStates
+            security:
+                - ServiceBearerAuth: []
             description: |
                 Retrieves the currently stored States from Registry and writes their latest
                 projection to the `states` and `state_metrics` InfluxDB measurements.
@@ -87,6 +91,8 @@ paths:
                                 error: null
                 '400':
                     $ref: '#/components/responses/BadRequest'
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
                 '404':
                     $ref: '#/components/responses/NotFound'
                 '502':
@@ -99,6 +105,8 @@ paths:
             tags: [Dashboards]
             summary: Create or update the Grafana dashboard for an agreement version
             operationId: createAgreementVersionDashboard
+            security:
+                - ServiceBearerAuth: []
             description: |
                 Resolves the selected agreement version through Registry, builds dashboard queries
                 against the current Reporter InfluxDB schema, and creates or updates the Grafana
@@ -148,6 +156,8 @@ paths:
                                               $ref: '#/components/schemas/DashboardResult'
                 '400':
                     $ref: '#/components/responses/BadRequest'
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
                 '404':
                     $ref: '#/components/responses/NotFound'
                 '502':
@@ -156,6 +166,13 @@ paths:
                     $ref: '#/components/responses/InternalError'
 
 components:
+    securitySchemes:
+        ServiceBearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+            description: JWT whose `type` claim is `service`.
+
     parameters:
         orgName:
             in: path
@@ -297,6 +314,12 @@ components:
                     type: integer
 
     responses:
+        Unauthorized:
+            description: Missing, invalid, or expired service token
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
         BadRequest:
             description: Invalid agreement version selector or request parameters
             content:
