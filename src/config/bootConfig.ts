@@ -20,7 +20,7 @@ export const bootEnv = {
     INFLUX_URL: process.env.INFLUX_URL || 'http://localhost:8181',
 
     // JWT configuration
-    SERVICE_AUTHENTICATION_ENABLED: process.env.SERVICE_AUTHENTICATION_ENABLED === 'true',
+    SERVICE_AUTHENTICATION_ENABLED: process.env.SERVICE_AUTHENTICATION_ENABLED !== 'false',
     JWT_SECRET: process.env.JWT_SECRET || 'governify_next_secret_key',
     JWT_ISSUER: process.env.JWT_ISSUER || 'authenticator',
     JWT_AUDIENCE: process.env.JWT_AUDIENCE || 'governify-next',
