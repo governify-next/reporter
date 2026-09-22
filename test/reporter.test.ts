@@ -7,6 +7,7 @@ import * as influxService from '../src/services/influx.service.js';
 import * as dashboardService from '../src/services/dashboard.service.js';
 import * as grafanaIntegration from '../src/integrations/grafana.integration.js';
 import { connectInflux, disconnectInflux, writeInfluxPoints } from '../src/db/influx.js';
+import * as influxDb from '../src/db/influx.js';
 import {
     ComplianceStatus,
     MetricStatus,
@@ -1102,6 +1103,83 @@ describe('Grafana integration', () => {
 });
 
 describe('Reporter routes', () => {
+    const syncPath = `/api/v1/influx/organizations/organization/scopes/scope-id/agreementCollections/${agreementVersionStates.agColId}/agreementVersions/auditableVersion/states/sync`;
+    const updatedFrom = '2026-09-22T12:00:00+02:00';
+    const updatedTo = '2026-09-22T11:00:00.000Z';
+
+    it.each([undefined, {}, { updatedFrom }, { updatedTo }, { updatedFrom, updatedTo }])(
+        'forwards optional bounds from the POST body to Registry and writes the returned States: %j',
+        async (body) => {
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: async () => ({ success: true, data: agreementVersionStates }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            const writeSpy = vi
+                .spyOn(influxDb, 'writeInfluxPoints')
+                .mockResolvedValue({ points: 4, batches: 1 });
+
+            const req = request(app).post(syncPath);
+            const response = await (body === undefined ? req : req.send(body));
+
+            expect(response.status).toBe(200);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            const url = new URL(fetchMock.mock.calls[0][0]);
+            expect(url.pathname).toBe(syncPath.replace('/influx', '').replace('/sync', ''));
+            expect(Object.fromEntries(url.searchParams)).toEqual(body ?? {});
+            expect(writeSpy).toHaveBeenCalledWith([
+                ...influxService.buildInfluxPoints(agreementVersionStates).statePoints,
+                ...influxService.buildInfluxPoints(agreementVersionStates).metricPoints,
+            ]);
+            expect(response.body.data.totalPoints).toBe(4);
+        },
+    );
+
+    it('accepts equal bounds and handles an empty Registry selection', async () => {
+        const emptySelection = structuredClone(agreementVersionStates);
+        emptySelection.agreementVersion.contract.signatures[0].states = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: async () => ({ success: true, data: emptySelection }),
+            }),
+        );
+        const writeSpy = vi
+            .spyOn(influxDb, 'writeInfluxPoints')
+            .mockResolvedValue({ points: 0, batches: 0 });
+        const response = await request(app)
+            .post(syncPath)
+            .send({ updatedFrom, updatedTo: updatedFrom });
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            statePoints: 0,
+            metricPoints: 0,
+            totalPoints: 0,
+            batches: 0,
+        });
+        expect(writeSpy).toHaveBeenCalledWith([]);
+    });
+
+    it.each([
+        { updatedFrom: 'invalid' },
+        { updatedTo: '' },
+        { updatedFrom: null },
+        { updatedTo: 123 },
+        { updatedFrom: [updatedFrom] },
+        { updatedTo: { nested: updatedTo } },
+        { updatedFrom: '2026-02-30T00:00:00Z' },
+        { updatedFrom: updatedTo, updatedTo: updatedFrom },
+    ])('rejects invalid bounds before contacting Registry: %j', async (body) => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        const response = await request(app).post(syncPath).send(body);
+        expect(response.status).toBe(400);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('forwards the current identifiers to the manual synchronization service', async () => {
         const syncResult = {
             organizationName: 'organization',
@@ -1128,6 +1206,7 @@ describe('Reporter routes', () => {
             'scope-id',
             agreementVersionStates.agColId,
             'auditableVersion',
+            { updatedFrom: undefined, updatedTo: undefined },
         );
     });
 

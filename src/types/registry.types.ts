@@ -1,3 +1,8 @@
+export type StateUpdatedRange = {
+    updatedFrom?: string;
+    updatedTo?: string;
+};
+
 export enum StateStatus {
     IN_PROGRESS = 'IN_PROGRESS',
     COMPLETED = 'COMPLETED',

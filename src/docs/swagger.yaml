@@ -46,6 +46,12 @@ paths:
                 Retrieves the currently stored States from Registry and writes their latest
                 projection to the `states` and `state_metrics` InfluxDB measurements.
 
+                Optional JSON fields `updatedFrom` (inclusive) and `updatedTo` (exclusive)
+                are forwarded to Registry to filter States by `updatedAt`, not their evaluation
+                `date`. Either bound may be omitted independently. Omitting both fields or the
+                body synchronizes all States. When both are supplied, `updatedTo` must be after
+                or equal to `updatedFrom`; equal bounds synchronize no States.
+
                 `agreementVersion` accepts a one-based number (`1` selects the first version) or
                 `auditableVersion`, which Registry resolves to the current auditable version.
 
@@ -62,6 +68,24 @@ paths:
                 - $ref: '#/components/parameters/scopeId'
                 - $ref: '#/components/parameters/agColId'
                 - $ref: '#/components/parameters/agreementVersion'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                updatedFrom:
+                                    type: string
+                                    format: date-time
+                                    description: Inclusive lower bound for updatedAt.
+                                updatedTo:
+                                    type: string
+                                    format: date-time
+                                    description: Exclusive upper bound for updatedAt.
+                        example:
+                            updatedFrom: '2026-09-22T10:00:00.000Z'
+                            updatedTo: '2026-09-22T11:00:00.000Z'
             responses:
                 '200':
                     description: Current States synchronized successfully

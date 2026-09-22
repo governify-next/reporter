@@ -9,11 +9,13 @@ export const syncAgreementVersionStates = async (
 ) => {
     try {
         const { orgName, scopeId, agColId, agreementVersion } = req.params;
+        const { updatedFrom, updatedTo } = req.body ?? {};
         const states = await influxService.syncAgreementVersionStates(
             orgName,
             scopeId,
             agColId,
             agreementVersion,
+            { updatedFrom, updatedTo },
         );
         return sendSuccess(res, {
             data: states,

@@ -5,6 +5,7 @@ import type {
     AgreementCollectionInfo,
     AgreementVersion,
     AgreementVersionStatesResponse,
+    StateUpdatedRange,
 } from '../types/registry.types.js';
 
 const REGISTRY_SERVICE_URL = bootEnv.REGISTRY_SERVICE_URL.replace(/\/+$/, '');
@@ -76,8 +77,13 @@ export const getAgreementVersionStates = async (
     scopeId: string,
     agColId: string,
     agreementVersion: string,
+    range: StateUpdatedRange = {},
 ): Promise<AgreementVersionStatesResponse> => {
-    const path = `${buildAgreementVersionPath(orgName, scopeId, agColId, agreementVersion)}/states`;
+    const params = new URLSearchParams();
+    if (range.updatedFrom !== undefined) params.set('updatedFrom', range.updatedFrom);
+    if (range.updatedTo !== undefined) params.set('updatedTo', range.updatedTo);
+    const query = params.size > 0 ? `?${params.toString()}` : '';
+    const path = `${buildAgreementVersionPath(orgName, scopeId, agColId, agreementVersion)}/states${query}`;
     return await getRegistryData<AgreementVersionStatesResponse>(
         path,
         `states for agreement version ${agreementVersion}`,
