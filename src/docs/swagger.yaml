@@ -47,7 +47,7 @@ paths:
                 projection to the `states` and `state_metrics` InfluxDB measurements.
 
                 Optional JSON fields `updatedFrom` (inclusive) and `updatedTo` (exclusive)
-                are forwarded to Registry to filter States by `updatedAt`, not their evaluation
+                are forwarded in a JSON body to Registry's State search to filter by `updatedAt`, not their evaluation
                 `date`. Either bound may be omitted independently. Omitting both fields or the
                 body synchronizes all States. When both are supplied, `updatedTo` must be after
                 or equal to `updatedFrom`; equal bounds synchronize no States.

@@ -34,11 +34,15 @@ const buildAgreementVersionPath = (
     )}`;
 };
 
-const getRegistryData = async <T>(path: string, resourceDescription: string): Promise<T> => {
+const requestRegistryData = async <T>(
+    path: string,
+    resourceDescription: string,
+    options: { method: 'GET' | 'POST'; body?: string } = { method: 'GET' },
+): Promise<T> => {
     let response: Response;
     try {
         response = await fetch(`${REGISTRY_SERVICE_URL}${path}`, {
-            method: 'GET',
+            ...options,
             headers: getServiceHeaders(),
         });
     } catch (error) {
@@ -75,7 +79,7 @@ const getRegistryData = async <T>(path: string, resourceDescription: string): Pr
 
 export const getAgreementCollectionForTasks = async (orgName: string, agColId: string) => {
     const path = `/api/v1/organizations/${encodePathSegment(orgName)}/agreementCollections/${encodePathSegment(agColId)}?expand=false`;
-    return getRegistryData<AgreementCollectionForTasks>(
+    return requestRegistryData<AgreementCollectionForTasks>(
         path,
         'agreement collection for synchronization tasks',
     );
@@ -88,14 +92,11 @@ export const getAgreementVersionStates = async (
     agreementVersion: string,
     range: StateUpdatedRange = {},
 ): Promise<AgreementVersionStatesResponse> => {
-    const params = new URLSearchParams();
-    if (range.updatedFrom !== undefined) params.set('updatedFrom', range.updatedFrom);
-    if (range.updatedTo !== undefined) params.set('updatedTo', range.updatedTo);
-    const query = params.size > 0 ? `?${params.toString()}` : '';
-    const path = `${buildAgreementVersionPath(orgName, scopeId, agColId, agreementVersion)}/states${query}`;
-    return await getRegistryData<AgreementVersionStatesResponse>(
+    const path = `${buildAgreementVersionPath(orgName, scopeId, agColId, agreementVersion)}/states/search`;
+    return await requestRegistryData<AgreementVersionStatesResponse>(
         path,
         `states for agreement version ${agreementVersion}`,
+        { method: 'POST', body: JSON.stringify(range) },
     );
 };
 
@@ -111,7 +112,10 @@ export const getAgreementVersion = async (
         agColId,
         agreementVersion,
     )}?expand=true`;
-    return await getRegistryData<AgreementVersion>(path, `agreement version ${agreementVersion}`);
+    return await requestRegistryData<AgreementVersion>(
+        path,
+        `agreement version ${agreementVersion}`,
+    );
 };
 
 export const getAgreementCollectionInfo = async (
@@ -119,7 +123,7 @@ export const getAgreementCollectionInfo = async (
     agColId: string,
 ): Promise<AgreementCollectionInfo> => {
     const path = `/api/v1/organizations/${encodePathSegment(orgName)}/agreementCollections/${encodePathSegment(agColId)}?expand=false`;
-    const collection = await getRegistryData<AgreementCollectionInfo>(
+    const collection = await requestRegistryData<AgreementCollectionInfo>(
         path,
         'agreement information',
     );

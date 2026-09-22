@@ -149,7 +149,7 @@ describe('Registry integration', () => {
         );
     });
 
-    it('uses the current Registry State route and safely encodes path parameters', async () => {
+    it('uses the Registry State search route and safely encodes path parameters', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
@@ -165,8 +165,8 @@ describe('Registry integration', () => {
         );
 
         expect(fetchMock).toHaveBeenCalledWith(
-            `${bootEnv.REGISTRY_SERVICE_URL.replace(/\/+$/, '')}/api/v1/organizations/organization%20name/scopes/scope%2Fid/agreementCollections/${agreementVersionStates.agColId}/agreementVersions/auditableVersion/states`,
-            expect.objectContaining({ method: 'GET' }),
+            `${bootEnv.REGISTRY_SERVICE_URL.replace(/\/+$/, '')}/api/v1/organizations/organization%20name/scopes/scope%2Fid/agreementCollections/${agreementVersionStates.agColId}/agreementVersions/auditableVersion/states/search`,
+            expect.objectContaining({ method: 'POST', body: '{}' }),
         );
     });
 
@@ -1125,9 +1125,12 @@ describe('Reporter routes', () => {
 
             expect(response.status).toBe(200);
             expect(fetchMock).toHaveBeenCalledTimes(1);
-            const url = new URL(fetchMock.mock.calls[0][0]);
-            expect(url.pathname).toBe(syncPath.replace('/influx', '').replace('/sync', ''));
-            expect(Object.fromEntries(url.searchParams)).toEqual(body ?? {});
+            const [url, options] = fetchMock.mock.calls[0];
+            expect(new URL(url).pathname).toBe(
+                syncPath.replace('/influx', '').replace('/sync', '/search'),
+            );
+            expect(options.method).toBe('POST');
+            expect(JSON.parse(options.body)).toEqual(body ?? {});
             expect(writeSpy).toHaveBeenCalledWith([
                 ...influxService.buildInfluxPoints(agreementVersionStates).statePoints,
                 ...influxService.buildInfluxPoints(agreementVersionStates).metricPoints,
