@@ -136,6 +136,7 @@ paths:
             operationId: createStateSyncTask
             security:
                 - ServiceBearerAuth: []
+                - UserBearerAuth: []
             description: |
                 Creates one recurring `syncAgreementVersionStates` task for all signatures of
                 the selected version. Resolves organization and scope metadata with Scope Manager
@@ -341,6 +342,11 @@ components:
             scheme: bearer
             bearerFormat: JWT
             description: JWT whose `type` claim is `service`.
+        UserBearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+            description: JWT whose `type` claim is `user`. Only supported for creating or toggling State synchronization tasks.
 
     parameters:
         orgName:
@@ -560,7 +566,7 @@ components:
 
     responses:
         Unauthorized:
-            description: Missing, invalid, or expired service token
+            description: Missing, invalid, or expired token
             content:
                 application/json:
                     schema:

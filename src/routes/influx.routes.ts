@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import * as influxController from '../controllers/influx.controller.js';
-import { checkServiceAuthentication } from '../middlewares/authenticator.validator.js';
+import {
+    checkServiceAuthentication,
+    checkUserAuthentication,
+} from '../middlewares/authenticator.validator.js';
+import { anyOf } from '../middlewares/anyof.validator.js';
 import { validateSyncStatesBody } from '../middlewares/influx.validator.js';
 import * as syncTaskController from '../controllers/syncTask.controller.js';
 import {
@@ -15,7 +19,7 @@ const syncTasksPath =
 
 influxRoutes.post(
     syncTasksPath,
-    checkServiceAuthentication,
+    anyOf(checkUserAuthentication, checkServiceAuthentication),
     validateSyncTaskParams,
     validateCreateSyncTask,
     syncTaskController.createSyncTask,

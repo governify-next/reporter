@@ -1,4 +1,5 @@
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import app from '../src/app.js';
 import { bootEnv } from '../src/config/bootConfig.js';
@@ -35,6 +36,11 @@ const identity = { orgName: 'organization', orgId, scopeId, agColId, agreementVe
 const directorBase = bootEnv.DIRECTOR_SERVICE_URL.replace(/\/+$/, '');
 const scopeUrl = `${bootEnv.SCOPE_MANAGER_SERVICE_URL.replace(/\/+$/, '')}/api/v1/organizations/organization/scopes/${scopeId}`;
 const registryUrl = `${bootEnv.REGISTRY_SERVICE_URL.replace(/\/+$/, '')}/api/v1/organizations/organization/agreementCollections/${agColId}?expand=false`;
+const userToken = jwt.sign(
+    { type: 'user', userId: 'user-id', username: 'member', systemRole: 'USER' },
+    bootEnv.JWT_SECRET,
+    { subject: 'user-id', issuer: bootEnv.JWT_ISSUER, audience: bootEnv.JWT_AUDIENCE },
+);
 const ok = (data: unknown, status = 200) => ({
     ok: status < 400,
     status,
@@ -163,8 +169,21 @@ describe('Reporter synchronization task endpoints', () => {
         expect(JSON.parse(directorCalls()[0][1].body as string).inputArgs.agreementVersion).toBe(2);
     });
 
+    it.each([true, false])(
+        'allows an authenticated user to set synchronization enabled=%s',
+        async (enabled) => {
+            const response = await request(app)
+                .post(`${path}?enabled=${enabled}`)
+                .set('Authorization', `Bearer ${userToken}`)
+                .send(input);
+            expect(response.status).toBe(201);
+            expect(directorCalls()).toHaveLength(1);
+            expect(JSON.parse(directorCalls()[0][1].body as string).enabled).toBe(enabled);
+        },
+    );
+
     it.each(['get', 'post', 'delete'] as const)(
-        'requires service authentication for %s',
+        'requires authentication for %s',
         async (method) => {
             const response = await request(app)[method](path).send(input);
             expect(response.status).toBe(401);
