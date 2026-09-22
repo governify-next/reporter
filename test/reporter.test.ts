@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import request from 'supertest';
-import app from '../src/app.js';
+import { serviceRequest } from './serviceRequest.js';
 import { bootEnv } from '../src/config/bootConfig.js';
 import * as registryIntegration from '../src/integrations/registry.integration.js';
 import * as influxService from '../src/services/influx.service.js';
 import * as dashboardService from '../src/services/dashboard.service.js';
 import * as grafanaIntegration from '../src/integrations/grafana.integration.js';
+import * as serviceAuthentication from '../src/utils/serviceAuthentication.js';
 import { connectInflux, disconnectInflux, writeInfluxPoints } from '../src/db/influx.js';
 import * as influxDb from '../src/db/influx.js';
 import {
@@ -15,6 +15,13 @@ import {
     type AgreementState,
     type AgreementVersionStatesResponse,
 } from '../src/types/registry.types.js';
+
+beforeEach(() => {
+    vi.spyOn(serviceAuthentication, 'getServiceHeaders').mockReturnValue({
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer test-token',
+    });
+});
 
 const buildState = (overrides: Partial<AgreementState> = {}): AgreementState => ({
     _id: '665e5f6a7b8c9d0e1f2a3b4c',
@@ -1120,7 +1127,7 @@ describe('Reporter routes', () => {
                 .spyOn(influxDb, 'writeInfluxPoints')
                 .mockResolvedValue({ points: 4, batches: 1 });
 
-            const req = request(app).post(syncPath);
+            const req = serviceRequest.post(syncPath);
             const response = await (body === undefined ? req : req.send(body));
 
             expect(response.status).toBe(200);
@@ -1153,7 +1160,7 @@ describe('Reporter routes', () => {
         const writeSpy = vi
             .spyOn(influxDb, 'writeInfluxPoints')
             .mockResolvedValue({ points: 0, batches: 0 });
-        const response = await request(app)
+        const response = await serviceRequest
             .post(syncPath)
             .send({ updatedFrom, updatedTo: updatedFrom });
         expect(response.status).toBe(200);
@@ -1178,7 +1185,7 @@ describe('Reporter routes', () => {
     ])('rejects invalid bounds before contacting Registry: %j', async (body) => {
         const fetchMock = vi.fn();
         vi.stubGlobal('fetch', fetchMock);
-        const response = await request(app).post(syncPath).send(body);
+        const response = await serviceRequest.post(syncPath).send(body);
         expect(response.status).toBe(400);
         expect(fetchMock).not.toHaveBeenCalled();
     });
@@ -1198,7 +1205,7 @@ describe('Reporter routes', () => {
             .spyOn(influxService, 'syncAgreementVersionStates')
             .mockResolvedValue(syncResult);
 
-        const response = await request(app).post(
+        const response = await serviceRequest.post(
             `/api/v1/influx/organizations/organization/scopes/scope-id/agreementCollections/${agreementVersionStates.agColId}/agreementVersions/auditableVersion/states/sync`,
         );
 
@@ -1230,7 +1237,7 @@ describe('Reporter routes', () => {
             .spyOn(dashboardService, 'createAgreementVersionDashboard')
             .mockResolvedValue(dashboardResult);
 
-        const response = await request(app).post(
+        const response = await serviceRequest.post(
             `/api/v1/dashboards/organizations/organization/scopes/scope-id/agreementCollections/${agreementVersionStates.agColId}/agreementVersions/2`,
         );
 

@@ -61,7 +61,7 @@ export const createSyncTask = async (
 ) => {
     const { identity, initial, end } = await resolveAgreement(orgName, scopeId, agColId, selector);
     const startDate = new Date(options.startDate ?? initial);
-    const anchorDate = new Date(options.anchorDate ?? startDate);
+    const anchorDate = new Date(options.anchorDate ?? initial);
     if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(anchorDate.getTime())) {
         throw new ValidationError('The task must have valid startDate and anchorDate values');
     }

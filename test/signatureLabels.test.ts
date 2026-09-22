@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import request from 'supertest';
-import app from '../src/app.js';
+import { serviceRequest } from './serviceRequest.js';
 import * as registry from '../src/integrations/registry.integration.js';
 import * as grafana from '../src/integrations/grafana.integration.js';
 import type { AgreementVersion } from '../src/types/registry.types.js';
@@ -65,7 +64,7 @@ describe('dashboard signature label selection', () => {
         { signatureLabelMode: 'label' },
         { signatureLabelMode: 'signatureId' },
     ])('uses the requested names throughout the dashboard for body %j', async (body) => {
-        const response = await request(app).post(route).send(body);
+        const response = await serviceRequest.post(route).send(body);
         expect(response.status).toBe(200);
         const useId = body?.signatureLabelMode === 'signatureId';
         const { panels } = vi.mocked(grafana.saveDashboard).mock.calls[0][0] as { panels: Panel[] };
@@ -106,7 +105,7 @@ describe('dashboard signature label selection', () => {
                 signature.visualizationConfig.label = labels[index];
             });
             vi.mocked(registry.getAgreementVersion).mockResolvedValue(selectedVersion);
-            const response = await request(app).post(route).send({ signatureLabelMode: 'label' });
+            const response = await serviceRequest.post(route).send({ signatureLabelMode: 'label' });
             expect(response.status).toBe(200);
             const { panels } = vi.mocked(grafana.saveDashboard).mock.calls[0][0] as {
                 panels: Panel[];
@@ -143,7 +142,7 @@ describe('dashboard signature label selection', () => {
             Reflect.deleteProperty(signature, 'visualizationConfig');
         }
         vi.mocked(registry.getAgreementVersion).mockResolvedValue(legacy);
-        const response = await request(app).post(route).send({ signatureLabelMode: 'label' });
+        const response = await serviceRequest.post(route).send({ signatureLabelMode: 'label' });
         expect(response.status).toBe(200);
         const serialized = JSON.stringify(vi.mocked(grafana.saveDashboard).mock.calls[0][0]);
         expect(serialized).toContain("AS '619270'");
@@ -153,7 +152,7 @@ describe('dashboard signature label selection', () => {
     it.each(['invalid', '', null, true, 1, [], {}])(
         'rejects invalid mode %j before contacting services',
         async (mode) => {
-            const response = await request(app).post(route).send({ signatureLabelMode: mode });
+            const response = await serviceRequest.post(route).send({ signatureLabelMode: mode });
             expect(response.status).toBe(400);
             expect(response.body.appCode).toBe('VALIDATION_ERROR');
             expect(registry.getAgreementVersion).not.toHaveBeenCalled();

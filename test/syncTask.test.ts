@@ -1,8 +1,9 @@
 import request from 'supertest';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import app from '../src/app.js';
 import { bootEnv } from '../src/config/bootConfig.js';
 import * as serviceAuthentication from '../src/utils/serviceAuthentication.js';
+import { serviceRequest } from './serviceRequest.js';
 
 const orgId = '69cbdee759092b362376ca16';
 const scopeId = '69cbdee759092b362376ca17';
@@ -65,15 +66,11 @@ describe('Reporter synchronization task endpoints', () => {
         });
     });
 
-    afterEach(() => {
-        bootEnv.SERVICE_AUTHENTICATION_ENABLED = false;
-    });
-
     const directorCalls = () =>
         fetchMock.mock.calls.filter(([url]) => String(url).startsWith(directorBase));
 
     it('creates one recurring task for the resolved version with stable defaults', async () => {
-        const response = await request(app).post(path).send(input);
+        const response = await serviceRequest.post(path).send(input);
         expect(response.status).toBe(201);
         expect(response.body.data).toEqual({
             _id: 'task-id',
@@ -94,35 +91,43 @@ describe('Reporter synchronization task endpoints', () => {
             });
         }
         directorStatus = 200;
-        const repeated = await request(app).post(path).send(input);
+        const repeated = await serviceRequest.post(path).send(input);
         expect(repeated.status).toBe(200);
         expect(repeated.body.data).toEqual(response.body.data);
         expect(directorCalls()[0][1].body).toEqual(directorCalls()[1][1].body);
     });
 
-    it('accepts explicit scheduling dates and enabled=false for a numeric selector', async () => {
-        const response = await request(app)
+    it('defaults anchorDate to agreement validity with an explicit startDate', async () => {
+        const response = await serviceRequest
             .post(`${prefix}/2/tasks/states/sync?enabled=false`)
             .send({
                 ...input,
                 startDate: '2099-01-01T12:00:00+02:00',
-                anchorDate: '2099-01-01T12:05:00+02:00',
                 endDate: '2099-02-01T00:00:00Z',
             });
         expect(response.status).toBe(201);
         expect(response.body.data).toMatchObject({
             enabled: false,
             startDate: '2099-01-01T10:00:00.000Z',
-            anchorDate: '2099-01-01T10:05:00.000Z',
+            anchorDate: '2026-08-01T00:00:00.000Z',
             endDate: '2099-02-01T00:00:00.000Z',
             inputArgs: { ...identity, lookbackMs: input.lookbackMs },
         });
     });
 
+    it('accepts an explicit anchorDate', async () => {
+        const response = await serviceRequest.post(path).send({
+            ...input,
+            anchorDate: '2026-08-01T12:05:00+02:00',
+        });
+        expect(response.status).toBe(201);
+        expect(response.body.data.anchorDate).toBe('2026-08-01T10:05:00.000Z');
+    });
+
     it.each(['get', 'delete'] as const)(
         'scopes %s to recurring synchronization tasks of the selected agreement',
         async (method) => {
-            const response = await request(app)[method](path);
+            const response = await serviceRequest[method](path);
             expect(response.status).toBe(200);
             const [url, init] = directorCalls()[0];
             expect(url).toBe(
@@ -147,13 +152,13 @@ describe('Reporter synchronization task endpoints', () => {
                 ? Promise.resolve(ok([{ _id: 'task-id', inputArgs: identity }]))
                 : upstream(url, init),
         );
-        const response = await request(app).get(path);
+        const response = await serviceRequest.get(path);
         expect(response.body.data).toEqual([{ _id: 'task-id', inputArgs: identity }]);
     });
 
     it('uses the explicit version selector independently of the current auditable version', async () => {
         selectedCollection.auditableVersionNumber = 3;
-        const response = await request(app).get(`${prefix}/2/tasks/states/sync`);
+        const response = await serviceRequest.get(`${prefix}/2/tasks/states/sync`);
         expect(response.status).toBe(200);
         expect(JSON.parse(directorCalls()[0][1].body as string).inputArgs.agreementVersion).toBe(2);
     });
@@ -161,7 +166,6 @@ describe('Reporter synchronization task endpoints', () => {
     it.each(['get', 'post', 'delete'] as const)(
         'requires service authentication for %s',
         async (method) => {
-            bootEnv.SERVICE_AUTHENTICATION_ENABLED = true;
             const response = await request(app)[method](path).send(input);
             expect(response.status).toBe(401);
             expect(fetchMock).not.toHaveBeenCalled();
@@ -179,25 +183,26 @@ describe('Reporter synchronization task endpoints', () => {
         { ...input, interval: Number.MAX_SAFE_INTEGER + 1 },
         { ...input, startDate: 'invalid' },
         { ...input, anchorDate: null },
+        { ...input, anchorDate: 'invalid' },
         { ...input, endDate: '2026-02-30T00:00:00Z' },
     ])('rejects invalid task options before contacting services: %j', async (body) => {
-        const response = await request(app).post(path).send(body);
+        const response = await serviceRequest.post(path).send(body);
         expect(response.status).toBe(400);
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('rejects an omitted body and invalid enabled values', async () => {
-        expect((await request(app).post(path)).status).toBe(400);
-        expect((await request(app).post(`${path}?enabled=yes`).send(input)).status).toBe(400);
+        expect((await serviceRequest.post(path)).status).toBe(400);
+        expect((await serviceRequest.post(`${path}?enabled=yes`).send(input)).status).toBe(400);
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it.each(['0', '-1', '1.5', '9007199254740992', 'unknown'])(
         'rejects invalid selector %s',
         async (selector) => {
-            expect((await request(app).get(`${prefix}/${selector}/tasks/states/sync`)).status).toBe(
-                400,
-            );
+            expect(
+                (await serviceRequest.get(`${prefix}/${selector}/tasks/states/sync`)).status,
+            ).toBe(400);
             expect(fetchMock).not.toHaveBeenCalled();
         },
     );
@@ -207,13 +212,7 @@ describe('Reporter synchronization task endpoints', () => {
         { startDate: '2099-02-01T00:00:00Z', endDate: '2099-01-01T00:00:00Z' },
         { endDate: '2026-07-01T00:00:00Z' },
     ])('rejects invalid schedule bounds before creating a task: %j', async (dates) => {
-        expect(
-            (
-                await request(app)
-                    .post(path)
-                    .send({ ...input, ...dates })
-            ).status,
-        ).toBe(400);
+        expect((await serviceRequest.post(path).send({ ...input, ...dates })).status).toBe(400);
         expect(directorCalls()).toHaveLength(0);
     });
 
@@ -221,15 +220,15 @@ describe('Reporter synchronization task endpoints', () => {
         'rejects a collection belonging to another scope for %s',
         async (method) => {
             selectedCollection.scopeId = '69cbdee759092b362376ca18';
-            expect((await request(app)[method](path).send(input)).status).toBe(404);
+            expect((await serviceRequest[method](path).send(input)).status).toBe(404);
             expect(directorCalls()).toHaveLength(0);
         },
     );
 
     it('rejects a missing numeric or auditable version', async () => {
         selectedCollection.auditableVersionNumber = 99;
-        expect((await request(app).post(path).send(input)).status).toBe(404);
-        expect((await request(app).get(`${prefix}/3/tasks/states/sync`)).status).toBe(404);
+        expect((await serviceRequest.post(path).send(input)).status).toBe(404);
+        expect((await serviceRequest.get(`${prefix}/3/tasks/states/sync`)).status).toBe(404);
         expect(directorCalls()).toHaveLength(0);
     });
 
@@ -240,7 +239,7 @@ describe('Reporter synchronization task endpoints', () => {
             fetchMock.mockImplementation((url, init) =>
                 url === failedUrl ? Promise.reject(new Error('Unavailable')) : upstream(url, init),
             );
-            expect((await request(app).get(path)).status).toBe(502);
+            expect((await serviceRequest.get(path)).status).toBe(502);
             if (failedUrl !== `${directorBase}/api/v1/tasks/search`)
                 expect(directorCalls()).toHaveLength(0);
         },
@@ -251,14 +250,14 @@ describe('Reporter synchronization task endpoints', () => {
         fetchMock.mockImplementation((url, init) =>
             url === registryUrl ? Promise.resolve(ok(null, 404)) : upstream(url, init),
         );
-        expect((await request(app).delete(path)).status).toBe(404);
+        expect((await serviceRequest.delete(path)).status).toBe(404);
         expect(directorCalls()).toHaveLength(0);
         fetchMock.mockImplementation((url, init) =>
             url === `${directorBase}/api/v1/tasks`
                 ? Promise.resolve(ok(null, 400))
                 : upstream(url, init),
         );
-        expect((await request(app).post(path).send(input)).status).toBe(400);
+        expect((await serviceRequest.post(path).send(input)).status).toBe(400);
     });
 
     it.each([null, { success: false }, { success: true }])(
@@ -270,7 +269,7 @@ describe('Reporter synchronization task endpoints', () => {
                     ? Promise.resolve({ ok: true, status: 200, json: async () => result })
                     : upstream(url, init),
             );
-            expect((await request(app).get(path)).status).toBe(502);
+            expect((await serviceRequest.get(path)).status).toBe(502);
         },
     );
 
@@ -287,6 +286,6 @@ describe('Reporter synchronization task endpoints', () => {
                   })
                 : upstream(url, init),
         );
-        expect((await request(app).get(path)).status).toBe(502);
+        expect((await serviceRequest.get(path)).status).toBe(502);
     });
 });

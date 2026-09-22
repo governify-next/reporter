@@ -142,8 +142,9 @@ paths:
                 and validates the collection and version with Registry. `auditableVersion` is
                 resolved to a one-based numeric position, which may differ from `versionNumber`.
                 Each run synchronizes `updatedAt` in `[scheduledAt - lookbackMs, scheduledAt)`.
-                `startDate` defaults to the version validity start; `anchorDate` defaults to
-                `startDate`. `endDate` defaults to the selected version's `contract.validity.end`;
+                `startDate` defaults to the version validity start. `anchorDate` defaults to
+                the selected version's `contract.validity.initial` and can be overridden.
+                `endDate` defaults to the selected version's `contract.validity.end`;
                 an explicit value overrides it. The resolved end date must be in the future and
                 after `startDate`.
                 Identical input and scheduling values reuse the existing Director task;
@@ -162,9 +163,20 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/StateSyncTaskOptions'
-                        example:
-                            interval: 300000
-                            lookbackMs: 3600000
+                        examples:
+                            requiredFields:
+                                summary: Required fields only
+                                value:
+                                    interval: 300000
+                                    lookbackMs: 3600000
+                            allFields:
+                                summary: All scheduling options
+                                value:
+                                    interval: 300000
+                                    lookbackMs: 3600000
+                                    startDate: '2099-01-01T00:00:00.000Z'
+                                    anchorDate: '2026-08-01T00:00:00.000Z'
+                                    endDate: '2099-02-01T00:00:00.000Z'
             responses:
                 '201':
                     description: Task created; data contains the Director task.
@@ -392,7 +404,7 @@ components:
                 anchorDate:
                     type: string
                     format: date-time
-                    description: Recurrence reference date; defaults to startDate.
+                    description: Recurrence reference date; defaults to the selected agreement version's contract.validity.initial.
                 endDate:
                     type: string
                     format: date-time

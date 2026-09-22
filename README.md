@@ -38,7 +38,7 @@ Optional ISO 8601 body fields control scheduling:
 | Field        | Default                          | Meaning                                                                     |
 | ------------ | -------------------------------- | --------------------------------------------------------------------------- |
 | `startDate`  | Agreement version validity start | Earliest permitted execution date.                                          |
-| `anchorDate` | Resolved `startDate`             | Reference date for the recurrence interval.                                 |
+| `anchorDate` | Agreement version validity start | Reference date for the recurrence interval.                                 |
 | `endDate`    | Agreement version validity end   | Last permitted execution date; must be in the future and after `startDate`. |
 
 When omitted, `endDate` uses the selected version's `contract.validity.end`; an explicit value
