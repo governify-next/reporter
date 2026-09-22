@@ -112,6 +112,16 @@ export type AgreementCollectionInfo = {
     description?: string;
 };
 
+export type AgreementCollectionForTasks = {
+    _id: string;
+    scopeId: string;
+    auditableVersionNumber: number | null;
+    agreementVersions: Array<{
+        versionNumber: number;
+        contract: { validity: { initial: string; end: string } };
+    }>;
+};
+
 export type AgreementVersion = {
     versionNumber: number;
     contract: {

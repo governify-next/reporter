@@ -124,6 +124,139 @@ paths:
                 '500':
                     $ref: '#/components/responses/InternalError'
 
+    /api/v1/influx/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}/tasks/states/sync:
+        parameters:
+            - $ref: '#/components/parameters/orgName'
+            - $ref: '#/components/parameters/scopeId'
+            - $ref: '#/components/parameters/agColId'
+            - $ref: '#/components/parameters/agreementVersion'
+        post:
+            tags: [InfluxDB]
+            summary: Create a recurring State synchronization task in Director
+            operationId: createStateSyncTask
+            security:
+                - ServiceBearerAuth: []
+            description: |
+                Creates one recurring `syncAgreementVersionStates` task for all signatures of
+                the selected version. Resolves organization and scope metadata with Scope Manager
+                and validates the collection and version with Registry. `auditableVersion` is
+                resolved to a one-based numeric position, which may differ from `versionNumber`.
+                Each run synchronizes `updatedAt` in `[scheduledAt - lookbackMs, scheduledAt)`.
+                `startDate` defaults to the version validity start; `anchorDate` defaults to
+                `startDate`. `endDate` defaults to the selected version's `contract.validity.end`;
+                an explicit value overrides it. The resolved end date must be in the future and
+                after `startDate`.
+                Identical input and scheduling values reuse the existing Director task;
+                a repeated request can update its enabled state. Different schedules or
+                lookback values create different tasks. Past occurrences are not replayed.
+            parameters:
+                - name: enabled
+                  in: query
+                  required: false
+                  schema:
+                      type: boolean
+                      default: true
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StateSyncTaskOptions'
+                        example:
+                            interval: 300000
+                            lookbackMs: 3600000
+            responses:
+                '201':
+                    description: Task created; data contains the Director task.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StateSyncTaskResponse'
+                '200':
+                    description: Identical task already exists; data contains the Director task.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StateSyncTaskResponse'
+                '400':
+                    $ref: '#/components/responses/BadRequest'
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '404':
+                    $ref: '#/components/responses/NotFound'
+                '502':
+                    $ref: '#/components/responses/BadGateway'
+        get:
+            tags: [InfluxDB]
+            summary: List recurring State synchronization tasks for an agreement version
+            operationId: getStateSyncTasks
+            security:
+                - ServiceBearerAuth: []
+            description: |
+                Returns enabled and disabled recurring synchronization tasks matching the resolved
+                organization, scope, collection, and version. Other scripts are excluded.
+                `auditableVersion` resolves the current version on each request; use a numeric
+                selector to manage earlier versions after the auditable version changes.
+            responses:
+                '200':
+                    description: Matching tasks, or an empty array.
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/SuccessResponse'
+                                    - type: object
+                                      properties:
+                                          data:
+                                              type: array
+                                              items:
+                                                  $ref: '#/components/schemas/StateSyncTask'
+                '400':
+                    $ref: '#/components/responses/BadRequest'
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '404':
+                    $ref: '#/components/responses/NotFound'
+                '502':
+                    $ref: '#/components/responses/BadGateway'
+        delete:
+            tags: [InfluxDB]
+            summary: Delete recurring State synchronization tasks for an agreement version
+            operationId: deleteStateSyncTasks
+            security:
+                - ServiceBearerAuth: []
+            description: |
+                Deletes the tasks selected by GET and their execution records through Director.
+                Matching uses the script, recurring type, and resolved agreement identifiers.
+                This does not delete States in Registry or points in InfluxDB.
+            responses:
+                '200':
+                    description: Counts of deleted tasks and execution records, including zero when none matched.
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: '#/components/schemas/SuccessResponse'
+                                    - type: object
+                                      properties:
+                                          data:
+                                              type: object
+                                              properties:
+                                                  deletedTasksCount:
+                                                      type: integer
+                                                      minimum: 0
+                                                  deletedExecutionsCount:
+                                                      type: integer
+                                                      minimum: 0
+                '400':
+                    $ref: '#/components/responses/BadRequest'
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '404':
+                    $ref: '#/components/responses/NotFound'
+                '502':
+                    $ref: '#/components/responses/BadGateway'
+
     /api/v1/dashboards/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}:
         post:
             tags: [Dashboards]
@@ -238,6 +371,82 @@ components:
                     value: auditableVersion
 
     schemas:
+        StateSyncTaskOptions:
+            type: object
+            required: [interval, lookbackMs]
+            properties:
+                interval:
+                    type: integer
+                    minimum: 1
+                    maximum: 9007199254740991
+                    description: Time between scheduled executions in milliseconds.
+                lookbackMs:
+                    type: integer
+                    minimum: 1
+                    maximum: 9007199254740991
+                    description: Milliseconds before scheduledAt to include in each synchronization.
+                startDate:
+                    type: string
+                    format: date-time
+                    description: Earliest execution date; defaults to agreement version validity start.
+                anchorDate:
+                    type: string
+                    format: date-time
+                    description: Recurrence reference date; defaults to startDate.
+                endDate:
+                    type: string
+                    format: date-time
+                    description: Final execution date, in the future and after startDate. Defaults to the selected agreement version's contract.validity.end.
+        StateSyncTask:
+            allOf:
+                - type: object
+                  properties:
+                      interval:
+                          type: integer
+                          minimum: 1
+                      startDate:
+                          type: string
+                          format: date-time
+                      anchorDate:
+                          type: string
+                          format: date-time
+                      endDate:
+                          type: string
+                          format: date-time
+                      _id:
+                          type: string
+                      script:
+                          type: string
+                          enum: [syncAgreementVersionStates]
+                      type:
+                          type: string
+                          enum: [RECURRING]
+                      enabled:
+                          type: boolean
+                      inputArgs:
+                          type: object
+                          properties:
+                              orgName:
+                                  type: string
+                              orgId:
+                                  type: string
+                              scopeId:
+                                  type: string
+                              agColId:
+                                  type: string
+                              agreementVersion:
+                                  type: integer
+                                  minimum: 1
+                              lookbackMs:
+                                  type: integer
+                                  minimum: 1
+        StateSyncTaskResponse:
+            allOf:
+                - $ref: '#/components/schemas/SuccessResponse'
+                - type: object
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/StateSyncTask'
         SuccessResponse:
             type: object
             required: [success, message, httpStatus, appCode, data, error]
@@ -357,7 +566,7 @@ components:
                     schema:
                         $ref: '#/components/schemas/ErrorResponse'
         BadGateway:
-            description: Registry returned an invalid or unavailable response
+            description: An upstream service (Registry, Scope Manager, or Director) returned an invalid or unavailable response
             content:
                 application/json:
                     schema:

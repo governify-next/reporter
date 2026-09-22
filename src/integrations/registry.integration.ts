@@ -3,6 +3,7 @@ import { getServiceHeaders } from '../utils/serviceAuthentication.js';
 import { StdError } from '../utils/customErrors.js';
 import type {
     AgreementCollectionInfo,
+    AgreementCollectionForTasks,
     AgreementVersion,
     AgreementVersionStatesResponse,
     StateUpdatedRange,
@@ -60,16 +61,24 @@ const getRegistryData = async <T>(path: string, resourceDescription: string): Pr
         });
     }
 
-    if (!response.ok || !result.success || result.data === undefined) {
+    if (!response.ok || !result?.success || result.data === undefined || result.data === null) {
         throw new StdError({
-            message: result.message ?? `Failed to fetch ${resourceDescription} from Registry`,
+            message: result?.message ?? `Failed to fetch ${resourceDescription} from Registry`,
             httpStatus: response.status >= 400 && response.status < 500 ? response.status : 502,
-            appCode: result.appCode ?? 'REGISTRY_REQUEST_FAILED',
-            details: result.error,
+            appCode: result?.appCode ?? 'REGISTRY_REQUEST_FAILED',
+            details: result?.error,
         });
     }
 
     return result.data;
+};
+
+export const getAgreementCollectionForTasks = async (orgName: string, agColId: string) => {
+    const path = `/api/v1/organizations/${encodePathSegment(orgName)}/agreementCollections/${encodePathSegment(agColId)}?expand=false`;
+    return getRegistryData<AgreementCollectionForTasks>(
+        path,
+        'agreement collection for synchronization tasks',
+    );
 };
 
 export const getAgreementVersionStates = async (
