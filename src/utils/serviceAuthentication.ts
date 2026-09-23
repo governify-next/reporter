@@ -7,8 +7,6 @@ const CLIENT_SECRET = bootEnv.CLIENT_SECRET;
 let serviceToken: string | null = null;
 
 export const fetchServiceToken = async () => {
-    if (!bootEnv.SERVICE_AUTHENTICATION_ENABLED) return null;
-
     const response = await fetch(`${AUTHENTICATOR_SERVICE_URL}/api/v1/services/token`, {
         method: 'POST',
         headers: {
@@ -20,29 +18,23 @@ export const fetchServiceToken = async () => {
         }),
     });
 
-    const result = (await response.json()) as {
-        success: boolean;
-        data?: { token?: string };
-    };
+    const result = await response.json();
 
-    if (!response.ok || !result.success || !result.data?.token)
+    if (!result.success)
         throw new Error(
             `Failed to fetch service token from authenticator (status: ${response.status})`,
         );
 
-    const token = result.data.token;
+    const token: string = result.data.token;
 
     serviceToken = token;
 
     return token;
 };
 
-export const getServiceHeaders = (): Record<string, string> => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-    if (!bootEnv.SERVICE_AUTHENTICATION_ENABLED) return headers;
-    if (!serviceToken) throw new Error('Reporter service token has not been initialized');
-
-    headers.Authorization = `Bearer ${serviceToken}`;
-    return headers;
+export const getServiceHeaders = () => {
+    return {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${serviceToken}`,
+    };
 };

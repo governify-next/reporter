@@ -1,3 +1,8 @@
+export type StateUpdatedRange = {
+    updatedFrom?: string;
+    updatedTo?: string;
+};
+
 export enum StateStatus {
     IN_PROGRESS = 'IN_PROGRESS',
     COMPLETED = 'COMPLETED',
@@ -105,6 +110,16 @@ export type AgreementCollectionInfo = {
     name: string;
     displayName?: string;
     description?: string;
+};
+
+export type AgreementCollectionForTasks = {
+    _id: string;
+    scopeId: string;
+    auditableVersionNumber: number | null;
+    agreementVersions: Array<{
+        versionNumber: number;
+        contract: { validity: { initial: string; end: string } };
+    }>;
 };
 
 export type AgreementVersion = {

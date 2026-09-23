@@ -4,12 +4,10 @@ import { fetchServiceToken, getServiceHeaders } from '../src/utils/serviceAuthen
 
 describe('Reporter service authentication', () => {
     afterEach(() => {
-        bootEnv.SERVICE_AUTHENTICATION_ENABLED = false;
         vi.unstubAllGlobals();
     });
 
     it('gets its service token from Authenticator', async () => {
-        bootEnv.SERVICE_AUTHENTICATION_ENABLED = true;
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
@@ -32,12 +30,5 @@ describe('Reporter service authentication', () => {
         expect(getServiceHeaders()).toMatchObject({
             Authorization: 'Bearer authenticator-token',
         });
-    });
-
-    it('does not add authorization when service authentication is disabled', async () => {
-        bootEnv.SERVICE_AUTHENTICATION_ENABLED = false;
-
-        await expect(fetchServiceToken()).resolves.toBeNull();
-        expect(getServiceHeaders()).toEqual({ 'Content-Type': 'application/json' });
     });
 });

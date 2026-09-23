@@ -3,8 +3,10 @@ import { getServiceHeaders } from '../utils/serviceAuthentication.js';
 import { StdError } from '../utils/customErrors.js';
 import type {
     AgreementCollectionInfo,
+    AgreementCollectionForTasks,
     AgreementVersion,
     AgreementVersionStatesResponse,
+    StateUpdatedRange,
 } from '../types/registry.types.js';
 
 const REGISTRY_SERVICE_URL = bootEnv.REGISTRY_SERVICE_URL.replace(/\/+$/, '');
@@ -32,11 +34,15 @@ const buildAgreementVersionPath = (
     )}`;
 };
 
-const getRegistryData = async <T>(path: string, resourceDescription: string): Promise<T> => {
+const requestRegistryData = async <T>(
+    path: string,
+    resourceDescription: string,
+    options: { method: 'GET' | 'POST'; body?: string } = { method: 'GET' },
+): Promise<T> => {
     let response: Response;
     try {
         response = await fetch(`${REGISTRY_SERVICE_URL}${path}`, {
-            method: 'GET',
+            ...options,
             headers: getServiceHeaders(),
         });
     } catch (error) {
@@ -59,16 +65,24 @@ const getRegistryData = async <T>(path: string, resourceDescription: string): Pr
         });
     }
 
-    if (!response.ok || !result.success || result.data === undefined) {
+    if (!response.ok || !result?.success || result.data === undefined || result.data === null) {
         throw new StdError({
-            message: result.message ?? `Failed to fetch ${resourceDescription} from Registry`,
+            message: result?.message ?? `Failed to fetch ${resourceDescription} from Registry`,
             httpStatus: response.status >= 400 && response.status < 500 ? response.status : 502,
-            appCode: result.appCode ?? 'REGISTRY_REQUEST_FAILED',
-            details: result.error,
+            appCode: result?.appCode ?? 'REGISTRY_REQUEST_FAILED',
+            details: result?.error,
         });
     }
 
     return result.data;
+};
+
+export const getAgreementCollectionForTasks = async (orgName: string, agColId: string) => {
+    const path = `/api/v1/organizations/${encodePathSegment(orgName)}/agreementCollections/${encodePathSegment(agColId)}?expand=false`;
+    return requestRegistryData<AgreementCollectionForTasks>(
+        path,
+        'agreement collection for synchronization tasks',
+    );
 };
 
 export const getAgreementVersionStates = async (
@@ -76,11 +90,13 @@ export const getAgreementVersionStates = async (
     scopeId: string,
     agColId: string,
     agreementVersion: string,
+    range: StateUpdatedRange = {},
 ): Promise<AgreementVersionStatesResponse> => {
-    const path = `${buildAgreementVersionPath(orgName, scopeId, agColId, agreementVersion)}/states`;
-    return await getRegistryData<AgreementVersionStatesResponse>(
+    const path = `${buildAgreementVersionPath(orgName, scopeId, agColId, agreementVersion)}/states/search`;
+    return await requestRegistryData<AgreementVersionStatesResponse>(
         path,
         `states for agreement version ${agreementVersion}`,
+        { method: 'POST', body: JSON.stringify(range) },
     );
 };
 
@@ -96,7 +112,10 @@ export const getAgreementVersion = async (
         agColId,
         agreementVersion,
     )}?expand=true`;
-    return await getRegistryData<AgreementVersion>(path, `agreement version ${agreementVersion}`);
+    return await requestRegistryData<AgreementVersion>(
+        path,
+        `agreement version ${agreementVersion}`,
+    );
 };
 
 export const getAgreementCollectionInfo = async (
@@ -104,7 +123,7 @@ export const getAgreementCollectionInfo = async (
     agColId: string,
 ): Promise<AgreementCollectionInfo> => {
     const path = `/api/v1/organizations/${encodePathSegment(orgName)}/agreementCollections/${encodePathSegment(agColId)}?expand=false`;
-    const collection = await getRegistryData<AgreementCollectionInfo>(
+    const collection = await requestRegistryData<AgreementCollectionInfo>(
         path,
         'agreement information',
     );
