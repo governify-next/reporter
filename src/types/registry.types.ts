@@ -106,6 +106,11 @@ export type AgreementSignature = {
     states?: AgreementState[];
 };
 
+export type AgreementTemplate = {
+    name: string;
+    guarantees: Array<{ guaranteeTemplateName: string }>;
+};
+
 export type AgreementCollectionInfo = {
     name: string;
     displayName?: string;

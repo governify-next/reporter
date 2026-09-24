@@ -69,6 +69,8 @@ Early termination is shown together with the originally scheduled end when prese
 The title uses the collection display name, falling back to its name and then the template name.
 Regenerate an existing dashboard to include the overview or refresh its agreement information.
 Dashboard titles follow organization, agreement name, and version order.
+Guarantee chart blocks follow the order of `guarantees` in the associated `agreementTemplate`.
+Only guarantees with signatures are shown; guarantees absent from the current template appear last.
 Reporter keeps the dashboard URL as `/d/<uid>` under the configured public URL.
 
 ## Signature labels
@@ -82,6 +84,10 @@ Dashboard creation accepts an optional JSON body with `signatureLabelMode`:
 
 Other values return HTTP 400. Older signatures without a configured label retain the
 previous presentation. Labels only affect display; queries still identify signatures by ID.
+Timeline colors are derived from the displayed label, so the same team or member keeps the same
+color across guarantees (lines and points). Without a label, or in `signatureId` mode, colors
+are derived from the full signature ID. Signature comparison bars retain their period colors
+(`All time` and `Selected period`), matching the chart legend.
 
 ## InfluxDB projection
 

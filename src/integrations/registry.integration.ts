@@ -4,6 +4,7 @@ import { StdError } from '../utils/customErrors.js';
 import type {
     AgreementCollectionInfo,
     AgreementCollectionForTasks,
+    AgreementTemplate,
     AgreementVersion,
     AgreementVersionStatesResponse,
     StateUpdatedRange,
@@ -115,6 +116,17 @@ export const getAgreementVersion = async (
     return await requestRegistryData<AgreementVersion>(
         path,
         `agreement version ${agreementVersion}`,
+    );
+};
+
+export const getAgreementTemplate = async (
+    orgName: string,
+    agreementTemplateName: string,
+): Promise<AgreementTemplate> => {
+    const path = `/api/v1/organizations/${encodePathSegment(orgName)}/agreementTemplates/${encodePathSegment(agreementTemplateName)}`;
+    return await requestRegistryData<AgreementTemplate>(
+        path,
+        `agreement template ${agreementTemplateName}`,
     );
 };
 

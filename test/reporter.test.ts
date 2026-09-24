@@ -124,6 +124,27 @@ const agreementVersionStates: AgreementVersionStatesResponse = {
 };
 
 describe('Registry integration', () => {
+    it('loads the agreement template and encodes its organization and name', async () => {
+        const template = {
+            name: 'template/name',
+            guarantees: [{ guaranteeTemplateName: 'guarantee' }],
+        };
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, data: template }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        expect(
+            await registryIntegration.getAgreementTemplate('organization name', 'template/name'),
+        ).toEqual(template);
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${bootEnv.REGISTRY_SERVICE_URL.replace(/\/+$/, '')}/api/v1/organizations/organization%20name/agreementTemplates/template%2Fname`,
+            expect.objectContaining({ method: 'GET' }),
+        );
+    });
+
     it('loads agreement information without expanding versions and encodes identifiers', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
@@ -280,12 +301,99 @@ describe('InfluxDB State projection', () => {
 
 describe('Grafana dashboard projection', () => {
     beforeEach(() => {
+        vi.spyOn(registryIntegration, 'getAgreementTemplate').mockResolvedValue({
+            name: 'template',
+            guarantees: [{ guaranteeTemplateName: 'guarantee' }],
+        });
         vi.spyOn(registryIntegration, 'getAgreementCollectionInfo').mockResolvedValue({
             name: 'agreement',
             displayName: 'Project agreement',
             description: 'Practices agreed with the project team.',
         });
         vi.spyOn(grafanaIntegration, 'syncAgreementValidityAnnotations').mockResolvedValue();
+    });
+
+    it('lays out guarantee blocks in template order regardless of signature order', async () => {
+        const selectedVersion = structuredClone(agreementVersionStates.agreementVersion);
+        const baseSignature = selectedVersion.contract.signatures[0];
+        selectedVersion.contract.signatures = [
+            'legacy-z',
+            'alpha',
+            'zeta',
+            'alpha',
+            'legacy-a',
+        ].map((name, index) => ({
+            ...baseSignature,
+            signatureId: `signature-${index}`,
+            guarantee: {
+                ...baseSignature.guarantee,
+                name,
+                info: {
+                    ...baseSignature.guarantee.info,
+                    title: name,
+                    description: `${name} description`,
+                },
+            },
+        }));
+        vi.spyOn(registryIntegration, 'getAgreementVersion').mockResolvedValue(selectedVersion);
+        vi.mocked(registryIntegration.getAgreementTemplate).mockResolvedValue({
+            name: 'template',
+            guarantees: ['zeta', 'unsigned', 'alpha'].map((guaranteeTemplateName) => ({
+                guaranteeTemplateName,
+            })),
+        });
+        vi.spyOn(grafanaIntegration, 'ensureInfluxDataSource').mockResolvedValue({
+            uid: 'datasource',
+            name: 'InfluxDB',
+        });
+        vi.spyOn(grafanaIntegration, 'ensureFolder').mockResolvedValue({
+            uid: 'folder',
+            title: 'Governify',
+        });
+        const saveDashboardSpy = vi.spyOn(grafanaIntegration, 'saveDashboard').mockResolvedValue({
+            uid: 'dashboard',
+            url: '/d/dashboard',
+            status: 'success',
+            version: 1,
+        });
+
+        await dashboardService.createAgreementVersionDashboard(
+            'organization',
+            'scope-id',
+            agreementVersionStates.agColId,
+            'auditableVersion',
+        );
+
+        expect(registryIntegration.getAgreementTemplate).toHaveBeenCalledWith(
+            'organization',
+            'template',
+        );
+        const { panels } = saveDashboardSpy.mock.calls[0][0] as {
+            panels: Array<{
+                type: string;
+                title: string;
+                gridPos: { y: number };
+                targets?: Array<{ refId: string; rawSql: string }>;
+            }>;
+        };
+        const rows = panels.filter((panel) => panel.type === 'row');
+        expect(rows.map((panel) => panel.title)).toEqual([
+            '(1) zeta description',
+            '(2) alpha description',
+            '(3) legacy-z description',
+            '(4) legacy-a description',
+        ]);
+        expect(rows.map((panel) => panel.gridPos.y)).toEqual(
+            rows.map((panel) => panel.gridPos.y).toSorted((a, b) => a - b),
+        );
+        const timelines = panels.filter((panel) => panel.type === 'timeseries');
+        expect(timelines.map((panel) => panel.title)).toEqual(
+            ['zeta', 'alpha', 'legacy-z', 'legacy-a'].map((name) => `Timeline - ${name} >= 1`),
+        );
+        const alphaTargets = timelines[1].targets!.filter((target) => target.refId !== 'T');
+        expect(alphaTargets).toHaveLength(2);
+        expect(alphaTargets[0].rawSql).toContain("'signature-1'");
+        expect(alphaTargets[1].rawSql).toContain("'signature-3'");
     });
 
     it('builds queries using scope, agreement collection id, and complianceStatus', async () => {
@@ -486,7 +594,7 @@ describe('Grafana dashboard projection', () => {
                 },
             ],
         );
-        expect(guaranteeRow?.title).toBe('Guarantee title');
+        expect(guaranteeRow?.title).toBe('(1) Guarantee description');
         expect(guaranteeRowIndex).toBeLessThan(guaranteeInfoPanelIndex!);
         expect(guaranteeInfoPanelIndex).toBeLessThan(timelinePanelIndex!);
         expect(guaranteeInfoPanel).toMatchObject({
@@ -495,7 +603,7 @@ describe('Grafana dashboard projection', () => {
                 mode: 'markdown',
             },
         });
-        expect(guaranteeInfoPanel?.options?.content).toContain(
+        expect(guaranteeInfoPanel?.options?.content).not.toContain(
             '**Description:** Guarantee description',
         );
         expect(guaranteeInfoPanel?.options?.content).toContain('**Example:** Guarantee example');

@@ -5,6 +5,7 @@ import { bootEnv } from '../config/bootConfig.js';
 import type {
     AgreementCollectionInfo,
     AgreementSignature,
+    AgreementTemplate,
     AgreementVersion,
 } from '../types/registry.types.js';
 
@@ -27,7 +28,7 @@ const datasource = {
 const GRID_WIDTH = 24;
 const SUMMARY_HEIGHT = 5;
 const TIMELINE_HEIGHT = 10;
-const GUARANTEE_INFO_HEIGHT = 5;
+const GUARANTEE_INFO_HEIGHT = 4;
 const SIGNATURE_COMPARISON_MIN_HEIGHT = 6;
 const COMPLIANCE_RANKING_PANEL_ID = 'governify-compliance-ranking-panel';
 const COMPLIANCE_RANKING_PANEL_VERSION = '1.0.2';
@@ -326,8 +327,13 @@ const toHexColor = (hue: number, saturation: number, lightness: number) => {
         .join('')}`;
 };
 
-const getSignatureColor = (signatureId: string) => {
-    const digest = crypto.createHash('sha1').update(signatureId).digest();
+const getSignatureColor = (
+    signature: AgreementSignature,
+    signatureLabelMode: SignatureLabelMode,
+) => {
+    const colorKey =
+        getConfiguredSignatureLabel(signature, signatureLabelMode) ?? signature.signatureId;
+    const digest = crypto.createHash('sha1').update(colorKey).digest();
     const hue = (digest.readUInt32BE(0) / 0xffffffff) * 360;
     const saturation = 62 + (digest[4] % 17);
     const lightness = 42 + (digest[5] % 15);
@@ -401,7 +407,7 @@ const buildSignatureTimelineOverrides = (
     signatureLabelMode: SignatureLabelMode,
 ) => {
     const seriesName = getSignatureSeriesName(signature, signatureLabelMode);
-    const color = getSignatureColor(signature.signatureId);
+    const color = getSignatureColor(signature, signatureLabelMode);
 
     return [
         {
@@ -639,7 +645,6 @@ const buildGuaranteeInfoPanel = (
         options: {
             mode: 'markdown',
             content: [
-                `**Description:** ${guarantee.info.description}`,
                 `**Example:** ${guarantee.info.example}`,
                 `---`,
                 `**Condition:** \`${condition}\``,
@@ -895,15 +900,33 @@ const buildDashboard = (
     grafanaUid: string,
     validity: AgreementVersion['contract']['validity'],
     agreement: AgreementCollectionInfo,
+    agreementTemplate: AgreementTemplate,
 ) => {
     let panelId = 1;
-    const guarantees = groupSignaturesByGuarantee(signatures);
+    const guaranteeOrder = new Map(
+        agreementTemplate.guarantees.map((guarantee, index) => [
+            guarantee.guaranteeTemplateName,
+            index,
+        ]),
+    );
+    // Keep guarantees from older versions that are no longer in the template at the end.
+    const guarantees = groupSignaturesByGuarantee(signatures).sort(
+        (a, b) =>
+            (guaranteeOrder.get(a.guaranteeName) ?? guaranteeOrder.size) -
+            (guaranteeOrder.get(b.guaranteeName) ?? guaranteeOrder.size),
+    );
     const overview = buildAgreementInfoPanel(0, context, agreement, validity);
     let y = overview.gridPos.h;
     const panels: Array<Record<string, unknown>> = [overview];
 
-    for (const guarantee of guarantees) {
-        panels.push(buildRowPanel(panelId++, guarantee.info.title, y));
+    for (const [index, guarantee] of guarantees.entries()) {
+        panels.push(
+            buildRowPanel(
+                panelId++,
+                `(${index + 1}) ${guarantee.info.description?.trim() || guarantee.info.title}`,
+                y,
+            ),
+        );
         y += 1;
 
         panels.push(buildGuaranteeInfoPanel(panelId++, y, guarantee.definition));
@@ -1062,6 +1085,10 @@ export const createAgreementVersionDashboard = async (
     };
 
     const signatures = selectedAgreementVersion.contract.signatures;
+    const agreementTemplate = await registryIntegrations.getAgreementTemplate(
+        orgName,
+        context.agreementTemplateName,
+    );
     const grafanaUid = buildDashboardUid(context);
     const dashboard = buildDashboard(
         context,
@@ -1069,6 +1096,7 @@ export const createAgreementVersionDashboard = async (
         grafanaUid,
         selectedAgreementVersion.contract.validity,
         agreement,
+        agreementTemplate,
     );
 
     await grafanaIntegration.ensureInfluxDataSource();
