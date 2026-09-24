@@ -171,6 +171,21 @@ The Grafana image uses version 13.0.1 by default. To deliberately change it, pas
 Its compiled plugin is included at `/opt/governify/plugins`, outside the persistent
 data directory `/var/lib/grafana`, and requires no startup download or host bind mount.
 The image permits loading only the unsigned plugin ID `governify-compliance-ranking-panel`.
+
+The custom image also simplifies navigation for login `user` with the `Viewer` role
+(excluding Grafana administrators). It hides the main menu, global dashboard search,
+folder breadcrumbs and favorites, including search keyboard shortcuts. Home and
+dashboard discovery pages show a message asking for the group's direct dashboard link.
+Dashboard time controls and variables remain available. Other accounts keep Grafana's UI.
+This is cosmetic: the shared account still has access through direct URLs and APIs.
+It does not isolate groups or change permissions.
+
+The customization lives in `grafana/ui`, loads before Grafana's application bundle,
+and supports a configured URL subpath. Recheck its selectors when upgrading Grafana.
+Development and local Compose use the custom image too; apply UI changes with
+`docker compose -f docker-compose.dev.yaml up -d --build --no-deps grafana` from
+the infrastructure directory. Existing dashboards do not need to be regenerated.
+
 Plugin versions in `package.json`, `plugin.json` and Reporter's dashboard generator must
 stay aligned when updating the panel contract.
 

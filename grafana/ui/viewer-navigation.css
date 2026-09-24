@@ -1,0 +1,20 @@
+/* Scope every rule so administrators retain the original Grafana interface. */
+.governify-viewer #mega-menu-toggle,
+.governify-viewer [data-testid='data-testid Home breadcrumb'],
+.governify-viewer nav[aria-label='Breadcrumbs'] li:has(a),
+.governify-viewer button[aria-label='Search...'],
+.governify-viewer [data-testid='data-testid Mark as favorite'],
+.governify-viewer [data-testid='data-testid Unmark as favorite'],
+.governify-group-entry #pageContent {
+    display: none !important;
+}
+
+#governify-group-entry {
+    padding: 80px 24px;
+    text-align: center;
+    font-size: 18px;
+}
+
+#governify-group-entry[hidden] {
+    display: none;
+}
