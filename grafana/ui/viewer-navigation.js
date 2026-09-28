@@ -20,8 +20,15 @@
     const updateRoute = () => {
         const path = window.location.pathname.slice(base.length).replace(/\/$/, '') || '/';
         const discovery = path === '/' || /^\/(dashboards|bookmarks|search)(\/|$)/.test(path);
-        root.classList.toggle('governify-group-entry', discovery);
-        message.hidden = !discovery;
+        const profile = /^\/profile(\/|$)/.test(path);
+        const text = profile
+            ? 'La edición del perfil y la contraseña no está disponible para esta cuenta compartida.'
+            : 'Abre el enlace de tu grupo para ver su dashboard.';
+        if (message.textContent !== text) {
+            message.textContent = text;
+        }
+        root.classList.toggle('governify-group-entry', discovery || profile);
+        message.hidden = !(discovery || profile);
     };
     updateRoute();
     window.addEventListener('popstate', updateRoute);

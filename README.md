@@ -177,6 +177,10 @@ The custom image also simplifies navigation for login `user` with the `Viewer` r
 folder breadcrumbs and favorites, including search keyboard shortcuts. Home and
 dashboard discovery pages show a message asking for the group's direct dashboard link.
 Dashboard time controls and variables remain available. Other accounts keep Grafana's UI.
+For the shared account, profile, password and theme editing entries are hidden too.
+Opening `/profile` or its subpages directly hides the form and shows an explanatory
+message; sign out remains available. These are also UI restrictions, not a server-side
+block on profile or password API requests.
 This is cosmetic: the shared account still has access through direct URLs and APIs.
 It does not isolate groups or change permissions.
 

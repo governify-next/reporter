@@ -83,4 +83,16 @@ describe('shared Grafana viewer navigation', () => {
         expect(fire('f', true)).toBe(false);
         expect(fire('t')).toBe(false);
     });
+    it.each(['/profile', '/profile/password', '/profile/notifications'])(
+        'hides account forms at %s, including subpath installations',
+        (path) => {
+            const state = mount('user', 'Viewer', false, '/grafana' + path, '/grafana');
+            expect(state.classes.has('governify-group-entry')).toBe(true);
+            expect(state.message.hidden).toBe(false);
+            expect(state.message.textContent).toContain('cuenta compartida');
+            state.location.pathname = '/grafana/';
+            state.listeners.get('popstate')?.();
+            expect(state.message.textContent).toContain('enlace de tu grupo');
+        },
+    );
 });

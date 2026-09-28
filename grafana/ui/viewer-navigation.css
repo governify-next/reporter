@@ -5,6 +5,9 @@
 .governify-viewer button[aria-label='Search...'],
 .governify-viewer [data-testid='data-testid Mark as favorite'],
 .governify-viewer [data-testid='data-testid Unmark as favorite'],
+.governify-viewer a[role='menuitem'][href$='/profile'],
+.governify-viewer a[role='menuitem'][href*='/profile/'],
+.governify-viewer [role='menuitem']:has([data-testid='icon-palette']),
 .governify-group-entry #pageContent {
     display: none !important;
 }
