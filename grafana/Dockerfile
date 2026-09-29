@@ -17,3 +17,9 @@ ENV GF_PATHS_PLUGINS=/opt/governify/plugins \
     GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=governify-compliance-ranking-panel
 
 COPY --from=plugin-build --chown=472:0 /usr/src/plugin/dist/ /opt/governify/plugins/governify-compliance-ranking-panel/
+
+USER root
+COPY grafana/ui/viewer-navigation.* /usr/share/grafana/public/governify/
+COPY grafana/ui/install.sh /tmp/governify-install.sh
+RUN sed -i 's/\r$//' /tmp/governify-install.sh && sh /tmp/governify-install.sh && rm /tmp/governify-install.sh
+USER 472

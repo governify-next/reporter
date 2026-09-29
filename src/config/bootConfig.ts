@@ -13,15 +13,21 @@ export const bootEnv = {
     PORT: process.env.PORT || '5905',
 
     // Internal service URLs
+    AUTHENTICATOR_SERVICE_URL: process.env.AUTHENTICATOR_SERVICE_URL || 'http://localhost:5900',
     REGISTRY_SERVICE_URL: process.env.REGISTRY_SERVICE_URL || 'http://localhost:5902',
+    SCOPE_MANAGER_SERVICE_URL: process.env.SCOPE_MANAGER_SERVICE_URL || 'http://localhost:5901',
+    DIRECTOR_SERVICE_URL: process.env.DIRECTOR_SERVICE_URL || 'http://localhost:5906',
 
     // Database URIs
     MONGO_URI: process.env.MONGO_URI || 'mongodb://localhost:27017/governify-next',
     INFLUX_URL: process.env.INFLUX_URL || 'http://localhost:8181',
 
     // JWT configuration
-    SERVICE_AUTHENTICATION_ENABLED: process.env.SERVICE_AUTHENTICATION_ENABLED === 'true',
+    CLIENT_ID: process.env.CLIENT_ID || 'reporter',
+    CLIENT_SECRET: process.env.CLIENT_SECRET || 'reporter_client_secret',
     JWT_SECRET: process.env.JWT_SECRET || 'governify_next_secret_key',
+    JWT_ISSUER: process.env.JWT_ISSUER || 'authenticator',
+    JWT_AUDIENCE: process.env.JWT_AUDIENCE || 'governify-next',
 
     // InfluxDB settings
     INFLUX_TOKEN: process.env.INFLUX_TOKEN || 'supersecrettoken',

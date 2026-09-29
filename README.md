@@ -7,12 +7,59 @@ and creates Grafana dashboards over that projection.
 
 - `POST /api/v1/influx/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}/states/sync`
   manually synchronizes all currently stored States and metrics.
+- `POST`, `GET`, `DELETE /api/v1/influx/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}/tasks/states/sync`
+  create, list, and delete recurring State synchronization tasks managed by Director.
 - `POST /api/v1/dashboards/organizations/{orgName}/scopes/{scopeId}/agreementCollections/{agColId}/agreementVersions/{agreementVersion}`
   creates or updates the Grafana dashboard.
 - `GET /health` checks service availability.
 - `/api-docs` exposes the Swagger UI.
 
 `agreementVersion` accepts a one-based positive integer or `auditableVersion`.
+
+## Recurring State synchronization
+
+The task creation endpoint accepts `?enabled=true` (default) or `?enabled=false` and this JSON body:
+
+```json
+{
+    "interval": 300000,
+    "lookbackMs": 3600000
+}
+```
+
+Both fields are required positive integers in milliseconds. This example runs every five minutes
+and synchronizes States with `updatedAt` in `[scheduledAt - 3600000, scheduledAt)`.
+Reporter creates one `RECURRING` task using Director's `syncAgreementVersionStates` script for
+the whole selected agreement version. Scope Manager supplies the organization ID; Registry
+supplies the collection and version metadata. The collection must belong to the requested scope.
+
+Optional ISO 8601 body fields control scheduling:
+
+| Field        | Default                          | Meaning                                                                     |
+| ------------ | -------------------------------- | --------------------------------------------------------------------------- |
+| `startDate`  | Agreement version validity start | Earliest permitted execution date.                                          |
+| `anchorDate` | Agreement version validity start | Reference date for the recurrence interval.                                 |
+| `endDate`    | Agreement version validity end   | Last permitted execution date; must be in the future and after `startDate`. |
+
+When omitted, `endDate` uses the selected version's `contract.validity.end`; an explicit value
+overrides this default. The resolved end date must be in the future and after `startDate`.
+Director schedules the
+next future occurrence when `startDate` is in the past; creating a task does not replay past runs.
+
+`auditableVersion` is resolved to its one-based numeric position when managing tasks, matching
+Registry's selector semantics. This position may differ from the stored `versionNumber`.
+After the current auditable version changes, use the numeric selector to manage tasks for an
+earlier version.
+
+POST returns the Director task with HTTP 201 when created or 200 when the same task already
+exists. Identical arguments and scheduling dates reuse Director's existing deduplication;
+changing the schedule or `lookbackMs` defines a different task. Repeating a request can update
+its `enabled` state. GET returns all matching recurring synchronization tasks, including disabled
+ones. DELETE removes matching tasks and their execution records and returns
+`deletedTasksCount` and `deletedExecutionsCount`. Other scripts are excluded from these operations.
+
+These endpoints require service authentication when enabled. Configure `DIRECTOR_SERVICE_URL`
+and `SCOPE_MANAGER_SERVICE_URL` in addition to `REGISTRY_SERVICE_URL`.
 
 ## Agreement overview
 
@@ -22,6 +69,8 @@ Early termination is shown together with the originally scheduled end when prese
 The title uses the collection display name, falling back to its name and then the template name.
 Regenerate an existing dashboard to include the overview or refresh its agreement information.
 Dashboard titles follow organization, agreement name, and version order.
+Guarantee chart blocks follow the order of `guarantees` in the associated `agreementTemplate`.
+Only guarantees with signatures are shown; guarantees absent from the current template appear last.
 Reporter keeps the dashboard URL as `/d/<uid>` under the configured public URL.
 
 ## Signature labels
@@ -35,6 +84,10 @@ Dashboard creation accepts an optional JSON body with `signatureLabelMode`:
 
 Other values return HTTP 400. Older signatures without a configured label retain the
 previous presentation. Labels only affect display; queries still identify signatures by ID.
+Timeline colors are derived from the displayed label, so the same team or member keeps the same
+color across guarantees (lines and points). Without a label, or in `signatureId` mode, colors
+are derived from the full signature ID. Signature comparison bars retain their period colors
+(`All time` and `Selected period`), matching the chart legend.
 
 ## InfluxDB projection
 
@@ -118,6 +171,25 @@ The Grafana image uses version 13.0.1 by default. To deliberately change it, pas
 Its compiled plugin is included at `/opt/governify/plugins`, outside the persistent
 data directory `/var/lib/grafana`, and requires no startup download or host bind mount.
 The image permits loading only the unsigned plugin ID `governify-compliance-ranking-panel`.
+
+The custom image also simplifies navigation for login `user` with the `Viewer` role
+(excluding Grafana administrators). It hides the main menu, global dashboard search,
+folder breadcrumbs and favorites, including search keyboard shortcuts. Home and
+dashboard discovery pages show a message asking for the group's direct dashboard link.
+Dashboard time controls and variables remain available. Other accounts keep Grafana's UI.
+For the shared account, profile, password and theme editing entries are hidden too.
+Opening `/profile` or its subpages directly hides the form and shows an explanatory
+message; sign out remains available. These are also UI restrictions, not a server-side
+block on profile or password API requests.
+This is cosmetic: the shared account still has access through direct URLs and APIs.
+It does not isolate groups or change permissions.
+
+The customization lives in `grafana/ui`, loads before Grafana's application bundle,
+and supports a configured URL subpath. Recheck its selectors when upgrading Grafana.
+Development and local Compose use the custom image too; apply UI changes with
+`docker compose -f docker-compose.dev.yaml up -d --build --no-deps grafana` from
+the infrastructure directory. Existing dashboards do not need to be regenerated.
+
 Plugin versions in `package.json`, `plugin.json` and Reporter's dashboard generator must
 stay aligned when updating the panel contract.
 

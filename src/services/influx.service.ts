@@ -11,6 +11,7 @@ import {
     type AgreementState,
     type AgreementStateMetric,
     type AgreementVersionStatesResponse,
+    type StateUpdatedRange,
 } from '../types/registry.types.js';
 
 const toRequiredTagValue = (value: unknown, fieldName: string): string => {
@@ -180,12 +181,14 @@ export const syncAgreementVersionStates = async (
     scopeId: string,
     agColId: string,
     agreementVersion: string,
+    range: StateUpdatedRange = {},
 ) => {
     const agreementVersionStates = await registryIntegration.getAgreementVersionStates(
         orgName,
         scopeId,
         agColId,
         agreementVersion,
+        range,
     );
     const { statePoints, metricPoints } = buildInfluxPoints(agreementVersionStates);
     const allPoints = [...statePoints, ...metricPoints];
