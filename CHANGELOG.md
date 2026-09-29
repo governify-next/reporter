@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.2.0](https://github.com/governify-next/reporter/compare/v1.1.1...v1.2.0) (2026-09-29)
+
+
+### Features
+
+* add @oas-tools/oas-telemetry for enhanced telemetry support ([b54d05c](https://github.com/governify-next/reporter/commit/b54d05cd2e8fc42dbf782cd3137ffc59439aaa81))
+* add agreement template support for dashboard generation and guarantee ordering ([2ee08ac](https://github.com/governify-next/reporter/commit/2ee08ac985d2c39e7dea0ab9e66d2f48ff184c63))
+* add recurring state synchronization tasks management ([6f29e0c](https://github.com/governify-next/reporter/commit/6f29e0c19f6b29f65dad4083da8d2b5a2d61fa3f))
+* add service authentication to reporter endpoints ([d67d9bb](https://github.com/governify-next/reporter/commit/d67d9bb6b8f5750d5cded40e70d89b076a6cfdce))
+* add support for optional date range filtering in syncAgreementVersionStates ([824f7dc](https://github.com/governify-next/reporter/commit/824f7dcef64237152f06f5af46a6d9ea0e3078b8))
+* add user authentication support for state synchronization tasks ([7a81e69](https://github.com/governify-next/reporter/commit/7a81e697b3e20bad135537112f77e9426694835d))
+* authenticate registry requests with service token ([800ee4c](https://github.com/governify-next/reporter/commit/800ee4cc30f1b2cbd45b13fbfcebe5ae91291d5e))
+* disable service authentication flag for tesing ([d6e5a67](https://github.com/governify-next/reporter/commit/d6e5a67f650067d6f7ce3193ab8713a4a91cbe7a))
+* enhance shared account UI restrictions and messaging for profile access ([90edc24](https://github.com/governify-next/reporter/commit/90edc241b00e6f8b766579ff0e843d5c9fe886c6))
+* implement service authentication and role-based access control ([5ba507d](https://github.com/governify-next/reporter/commit/5ba507dd766e2c6a128a4fedc487d33739631dc3))
+* implement viewer navigation customization for Grafana UI ([480a7d2](https://github.com/governify-next/reporter/commit/480a7d2baa208a61bb3783c8417d3066131ace10))
+* new version ([2c27ed9](https://github.com/governify-next/reporter/commit/2c27ed925cdb824627e453deb328ed0abe07e5c6))
+
+
+### Bug Fixes
+
+* **config:** add JWT issuer and audience ([3ac4530](https://github.com/governify-next/reporter/commit/3ac4530bf6d6e2108584ca647d772bfd49b5bfb8))
+* update state synchronization to use POST method ([a18e7ea](https://github.com/governify-next/reporter/commit/a18e7ea8c8ddb1a361e59b668f0a7399dc5ad630))
+
 ## [1.1.1](https://github.com/governify-next/reporter/compare/v1.1.0...v1.1.1) (2026-09-19)
 
 
