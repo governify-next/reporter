@@ -6,7 +6,9 @@ info:
         Reporter synchronizes the current State projection from Registry into InfluxDB and
         creates Grafana dashboards for a selected agreement version.
 
-        Protected operations require a JWT whose `type` claim is `service`.
+        Protected operations accept JWT bearer tokens issued for this API. Depending on the
+        operation, the token must represent either a user with the documented minimum system
+        role or an authenticated service.
 servers:
     - url: /
 tags:
@@ -41,7 +43,7 @@ paths:
             summary: Synchronize the current States of an agreement version
             operationId: syncAgreementVersionStates
             security:
-                - ServiceBearerAuth: []
+                - BearerAuth: []
             description: |
                 Retrieves the currently stored States from Registry and writes their latest
                 projection to the `states` and `state_metrics` InfluxDB measurements.
@@ -135,8 +137,7 @@ paths:
             summary: Create a recurring State synchronization task in Director
             operationId: createStateSyncTask
             security:
-                - ServiceBearerAuth: []
-                - UserBearerAuth: []
+                - BearerAuth: []
             description: |
                 Creates one recurring `syncAgreementVersionStates` task for all signatures of
                 the selected version. Resolves organization and scope metadata with Scope Manager
@@ -204,7 +205,7 @@ paths:
             summary: List recurring State synchronization tasks for an agreement version
             operationId: getStateSyncTasks
             security:
-                - ServiceBearerAuth: []
+                - BearerAuth: []
             description: |
                 Returns enabled and disabled recurring synchronization tasks matching the resolved
                 organization, scope, collection, and version. Other scripts are excluded.
@@ -237,7 +238,7 @@ paths:
             summary: Delete recurring State synchronization tasks for an agreement version
             operationId: deleteStateSyncTasks
             security:
-                - ServiceBearerAuth: []
+                - BearerAuth: []
             description: |
                 Deletes the tasks selected by GET and their execution records through Director.
                 Matching uses the script, recurring type, and resolved agreement identifiers.
@@ -276,7 +277,7 @@ paths:
             summary: Create or update the Grafana dashboard for an agreement version
             operationId: createAgreementVersionDashboard
             security:
-                - ServiceBearerAuth: []
+                - BearerAuth: []
             description: |
                 Resolves the selected agreement version through Registry, builds dashboard queries
                 against the current Reporter InfluxDB schema, and creates or updates the Grafana
@@ -337,16 +338,13 @@ paths:
 
 components:
     securitySchemes:
-        ServiceBearerAuth:
+        BearerAuth:
             type: http
             scheme: bearer
             bearerFormat: JWT
-            description: JWT whose `type` claim is `service`.
-        UserBearerAuth:
-            type: http
-            scheme: bearer
-            bearerFormat: JWT
-            description: JWT whose `type` claim is `user`. Only supported for creating or toggling State synchronization tasks.
+            description: |
+                JWT issued by Authenticator. Enter only the token, without the Bearer prefix.
+                Use a user or service token according to the operation's authentication requirements.
 
     parameters:
         orgName:
