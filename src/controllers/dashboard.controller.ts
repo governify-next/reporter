@@ -63,3 +63,23 @@ export const getAgreementVersionDashboardData = async (
         next(err);
     }
 };
+
+export const getAgreementVersionDashboard = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+) => {
+    try {
+        const { orgName, scopeId, agColId, agreementVersion } = req.params;
+        const data = await dashboardService.getAgreementVersionDashboard(
+            orgName,
+            scopeId,
+            agColId,
+            agreementVersion,
+        );
+
+        return sendSuccess(res, { data });
+    } catch (err) {
+        next(err);
+    }
+};

@@ -96,7 +96,9 @@ const buildValidityQuickRange = (validity: AgreementVersion['contract']['validit
     };
 };
 
-const buildDashboardUid = (context: DashboardContext) => {
+const buildDashboardUid = (
+    context: Pick<DashboardContext, 'orgName' | 'scopeId' | 'agColId' | 'agreementVersion'>,
+) => {
     const hash = crypto
         .createHash('sha1')
         .update(
@@ -1135,5 +1137,32 @@ export const createAgreementVersionDashboard = async (
         grafanaStatus: savedDashboard.status,
         grafanaVersion: savedDashboard.version,
         panels: Array.isArray(dashboard.panels) ? dashboard.panels.length : 0,
+    };
+};
+
+export const getAgreementVersionDashboard = async (
+    orgName: string,
+    scopeId: string,
+    agColId: string,
+    agreementVersion: string,
+) => {
+    const selectedAgreementVersion = await registryIntegrations.getAgreementVersion(
+        orgName,
+        scopeId,
+        agColId,
+        agreementVersion,
+    );
+    const { dashboard } = await grafanaIntegration.getDashboard(
+        buildDashboardUid({
+            orgName,
+            scopeId,
+            agColId,
+            agreementVersion: selectedAgreementVersion.versionNumber,
+        }),
+    );
+
+    return {
+        grafanaUid: dashboard.uid,
+        grafanaUrl: `${bootEnv.GRAFANA_PUBLIC_URL.replace(/\/+$/, '')}/d/${dashboard.uid}`,
     };
 };

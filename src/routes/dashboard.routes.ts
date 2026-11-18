@@ -17,6 +17,12 @@ dashboardRoutes.post(
     dashboardController.createAgreementVersionDashboard,
 );
 
+dashboardRoutes.get(
+    dashboardPath,
+    checkUserAuthentication,
+    dashboardController.getAgreementVersionDashboard,
+);
+
 // PoC: data for the ECharts dashboard embedded in the frontend.
 dashboardRoutes.get(
     `${dashboardPath}/data`,
