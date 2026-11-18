@@ -1162,7 +1162,6 @@ export const getAgreementVersionDashboard = async (
     );
 
     return {
-        grafanaUid: dashboard.uid,
         grafanaUrl: `${bootEnv.GRAFANA_PUBLIC_URL.replace(/\/+$/, '')}/d/${dashboard.uid}`,
     };
 };
