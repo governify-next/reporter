@@ -4,7 +4,6 @@ import {
     checkServiceAuthentication,
     checkUserAuthentication,
 } from '../middlewares/authenticator.validator.js';
-import { anyOf } from '../middlewares/anyof.validator.js';
 
 export const dashboardRoutes = Router();
 
@@ -21,11 +20,4 @@ dashboardRoutes.get(
     dashboardPath,
     checkUserAuthentication,
     dashboardController.getAgreementVersionDashboard,
-);
-
-// PoC: data for the ECharts dashboard embedded in the frontend.
-dashboardRoutes.get(
-    `${dashboardPath}/data`,
-    anyOf(checkUserAuthentication, checkServiceAuthentication),
-    dashboardController.getAgreementVersionDashboardData,
 );
