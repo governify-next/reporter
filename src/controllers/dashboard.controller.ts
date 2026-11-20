@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { ValidationError } from '../utils/customErrors.js';
 import { sendSuccess } from '../utils/standardResponse.js';
 import * as dashboardService from '../services/dashboard.service.js';
-import * as dashboardDataService from '../services/dashboardData.service.js';
 
 export const createAgreementVersionDashboard = async (
     req: Request,
@@ -36,26 +35,18 @@ export const createAgreementVersionDashboard = async (
     }
 };
 
-// PoC: data for the ECharts dashboard embedded in the frontend.
-export const getAgreementVersionDashboardData = async (
+export const getAgreementVersionDashboard = async (
     req: Request,
     res: Response,
     next: NextFunction,
 ) => {
     try {
         const { orgName, scopeId, agColId, agreementVersion } = req.params;
-        const from = new Date(String(req.query.from));
-        const to = new Date(String(req.query.to));
-        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
-            throw new ValidationError('from and to must be valid dates');
-        }
-        const data = await dashboardDataService.getAgreementVersionDashboardData(
+        const data = await dashboardService.getAgreementVersionDashboard(
             orgName,
             scopeId,
             agColId,
             agreementVersion,
-            from,
-            to,
         );
 
         return sendSuccess(res, { data });

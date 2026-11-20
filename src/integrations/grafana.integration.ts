@@ -1,4 +1,5 @@
 import { bootEnv } from '../config/bootConfig.js';
+import { NotFoundError } from '../utils/customErrors.js';
 
 type GrafanaDataSource = {
     id?: number;
@@ -298,4 +299,26 @@ export const saveDashboard = async (dashboard: Record<string, unknown>) => {
             message: 'Governify agreement version dashboard sync',
         }),
     });
+};
+
+export const getDashboard = async (dashboardUid: string) => {
+    const response = await fetch(
+        `${getGrafanaBaseUrl()}/api/dashboards/uid/${encodeURIComponent(dashboardUid)}`,
+        { headers: getAuthHeaders() },
+    );
+
+    if (response.status === 404) {
+        throw new NotFoundError(`Grafana dashboard ${dashboardUid} not found`);
+    }
+
+    if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(
+            `Grafana dashboard lookup failed: ${response.status} ${response.statusText}${
+                body ? ` - ${body}` : ''
+            }`,
+        );
+    }
+
+    return (await response.json()) as GetDashboardResponse;
 };
